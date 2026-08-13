@@ -108,7 +108,11 @@ export default function WorkoutEditorModal({ isOpen, onClose, exercise, dayId, c
     { label: 'Lunge', value: '/images/exercise_lunge.webp' },
     { label: 'Leg Press', value: '/images/exercise_legpress.webp' },
     { label: 'Burpee', value: '/images/exercise_burpee.webp' },
-    { label: 'High Knees', value: '/images/exercise_highknees.webp' }
+    { label: 'High Knees', value: '/images/exercise_highknees.webp' },
+    { label: 'Pushups', value: '/images/exercise_pushups.webp' },
+    { label: 'Row', value: '/images/exercise_row.webp' },
+    { label: 'Bicep Curl', value: '/images/exercise_bicepcurl.webp' },
+    { label: 'Tricep Dip', value: '/images/exercise_tricepdip.webp' }
   ];
 
   return (
@@ -205,18 +209,46 @@ export default function WorkoutEditorModal({ isOpen, onClose, exercise, dayId, c
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {/* Exercise Image Option */}
-            <div>
-              <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide block mb-1.5">Demo Illustration</label>
-              <select
-                value={image}
-                onChange={(e) => setImage(e.target.value)}
-                className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 outline-none focus:border-[#00af87] text-gray-700 font-medium cursor-pointer"
-              >
-                {imageOptions.map((opt, idx) => (
-                  <option key={idx} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+            {/* Exercise Image Option & Custom Upload */}
+            <div className="flex flex-col gap-2.5">
+              <div>
+                <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide block mb-1.5">Demo Illustration</label>
+                <select
+                  value={imageOptions.some(opt => opt.value === image) ? image : 'custom'}
+                  onChange={(e) => {
+                    if (e.target.value !== 'custom') {
+                      setImage(e.target.value);
+                    }
+                  }}
+                  className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 outline-none focus:border-[#00af87] text-gray-700 font-medium cursor-pointer"
+                >
+                  {imageOptions.map((opt, idx) => (
+                    <option key={idx} value={opt.value}>{opt.label}</option>
+                  ))}
+                  {!imageOptions.some(opt => opt.value === image) && (
+                    <option value="custom">Custom Uploaded</option>
+                  )}
+                </select>
+              </div>
+              
+              <div>
+                <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wide block mb-1">Or Upload Image</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setImage(reader.result);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="w-full text-[10px] bg-gray-50 border border-gray-200 rounded-xl px-2 py-1.5 text-gray-500 outline-none file:mr-2 file:py-0.5 file:px-1.5 file:rounded file:border-0 file:text-[9px] file:font-extrabold file:bg-teal-50 file:text-[#00af87] file:cursor-pointer hover:file:opacity-90 transition-all"
+                />
+              </div>
             </div>
 
             {/* Superset Link Selection */}
