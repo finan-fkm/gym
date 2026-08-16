@@ -46,13 +46,14 @@ export default function LoginPage() {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10 text-center">
         {/* Brand Logo */}
-        <div className="inline-flex items-center gap-2 mb-4">
-          <div className="w-12 h-12 rounded-full bg-teal-50 border-2 border-[#00af87] flex items-center justify-center relative">
-            <span className="text-[#00af87] font-bold text-2xl font-serif">F</span>
-            <div className="w-3.5 h-3.5 rounded-full bg-[#ff9f29] absolute -bottom-0.5 -right-0.5 border border-white"></div>
-          </div>
+        <div className="flex flex-col items-center mb-6">
+          <img
+            src="/logo.jpg"
+            alt="Fit By Shahid Logo"
+            className="w-24 h-24 rounded-full object-cover border border-gray-100 shadow-md mb-3"
+          />
           <span className="text-3xl font-extrabold tracking-tight text-gray-800 font-sans">
-            FIT_BY_SHAHID_<span className="text-[#00af87]">_</span>
+            FIT_BY_SHAHID<span className="text-[#00af87]">_</span>
           </span>
         </div>
         <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Premium Fitness Coaching Platform</p>

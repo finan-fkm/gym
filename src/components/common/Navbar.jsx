@@ -8,13 +8,14 @@ export default function Navbar() {
   return (
     <nav className="sticky top-0 z-50 bg-white border-b border-gray-100 px-6 py-3 flex items-center justify-between shadow-sm">
       {/* Brand Logo */}
-      <div className="flex items-center gap-2">
-        <div className="w-9 h-9 rounded-full bg-teal-50 border-2 border-[#00af87] flex items-center justify-center relative">
-          <span className="text-[#00af87] font-bold text-lg font-serif">F</span>
-          <div className="w-2.5 h-2.5 rounded-full bg-[#ff9f29] absolute -bottom-0.5 -right-0.5 border border-white"></div>
-        </div>
+      <div className="flex items-center gap-2.5">
+        <img
+          src="/logo.jpg"
+          alt="Fit By Shahid Logo"
+          className="w-9 h-9 rounded-full object-cover border border-gray-100 shadow-sm"
+        />
         <span className="text-xl font-bold tracking-tight text-[#2c3e50] font-sans">
-          FIT_BY_SHAHID_<span className="text-[#00af87]">_</span>
+          FIT_BY_SHAHID<span className="text-[#00af87]">_</span>
         </span>
       </div>
 
