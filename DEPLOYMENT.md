@@ -134,8 +134,14 @@ If you prefer hosting the React frontend on **Vercel** for ultra-fast global CDN
    - **Build Command**: `npm run build`
    - **Output Directory**: `dist`
 5. Expand **Environment Variables** and add:
-   - `VITE_API_URL`: `https://<your-render-backend-url>.onrender.com`
+   - `VITE_API_URL`: `https://gym-wm1s.onrender.com`
 6. Click **Deploy**.
 
 The pre-configured `vercel.json` in the root automatically routes all URL paths (like `/admin/dashboard` or `/login/client`) to `index.html`, ensuring clean browser refreshes without 404 errors.
+
+### Live Production Endpoints
+- **Live Backend API**: `https://gym-wm1s.onrender.com`
+- **Backend Health Check**: `https://gym-wm1s.onrender.com/api/health`
+- **Default Admin**: `admin` / `password`
+- **Default Client**: `@thespring` / `password` or `@johndoe` / `password`
 
