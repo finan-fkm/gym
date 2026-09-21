@@ -11,8 +11,10 @@ import {
   saveClient, 
   deleteClient, 
   getAdmin, 
+  saveAdmin,
   closeDb
 } from './db.js';
+import { initialClients } from './seedData.js';
 
 dotenv.config();
 
@@ -57,16 +59,49 @@ const authLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 app.use('/api/auth/', authLimiter);
 
+// Auto-seed database if empty on server start
+const autoSeed = async () => {
+  try {
+    const existingAdmin = await getAdmin('admin');
+    if (!existingAdmin) {
+      console.log('No admin found. Creating default admin account...');
+      const adminPasswordHash = await bcrypt.hash('password', 10);
+      await saveAdmin('admin', adminPasswordHash);
+      console.log('Default admin account created: admin / password');
+    }
+
+    const existingClients = await getClients();
+    if (existingClients.length === 0) {
+      console.log(`No clients found. Seeding ${initialClients.length} default client profiles...`);
+      const bcryptPassHash = await bcrypt.hash('password', 10);
+      for (const client of initialClients) {
+        const seededClient = JSON.parse(JSON.stringify(client));
+        if (seededClient.passwordCreated) {
+          seededClient.passwordHash = bcryptPassHash;
+        }
+        await saveClient(seededClient);
+        console.log(`Seeded client: ${seededClient.name} (${seededClient.username})`);
+      }
+      console.log('Client profiles seeded successfully.');
+    }
+  } catch (err) {
+    console.error('Auto-seed check error (non-fatal):', err);
+  }
+};
+
 // Initialize Database before starting the server
 let server;
-initDb().then(() => {
-  server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server is running on port ${PORT} (0.0.0.0)`);
+initDb()
+  .then(() => autoSeed())
+  .then(() => {
+    server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server is running on port ${PORT} (0.0.0.0)`);
+    });
+  })
+  .catch(err => {
+    console.error('Failed to start server due to database initialization error:', err);
+    process.exit(1);
   });
-}).catch(err => {
-  console.error('Failed to start server due to database initialization error:', err);
-  process.exit(1);
-});
 
 // Graceful shutdown handler
 const gracefulShutdown = (signal) => {
