@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGymState } from '../../context/GymStateContext';
-import { Edit2, Check, X, Plus, Trash2, MessageCircle, CreditCard, ChevronRight } from 'lucide-react';
+import { Edit2, Check, X, Plus, Trash2, MessageCircle, CreditCard } from 'lucide-react';
 
 export default function ClientProfileSidebar() {
   const {
@@ -17,6 +17,13 @@ export default function ClientProfileSidebar() {
   const [profileLocation, setProfileLocation] = useState('');
   const [profileHeight, setProfileHeight] = useState('');
   const [profilePhoto, setProfilePhoto] = useState('');
+  const [profileMemberId, setProfileMemberId] = useState('');
+  const [profilePhone, setProfilePhone] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
+  const [profilePlan, setProfilePlan] = useState('');
+  const [profileStartDate, setProfileStartDate] = useState('');
+  const [profileExpiryDate, setProfileExpiryDate] = useState('');
+  const [profileStatus, setProfileStatus] = useState('');
 
   const handleSaveProfile = () => {
     updateClientProfile(activeClient.id, {
@@ -24,7 +31,14 @@ export default function ClientProfileSidebar() {
       username: profileUsername,
       location: profileLocation,
       height: profileHeight,
-      photo: profilePhoto
+      photo: profilePhoto,
+      memberId: profileMemberId,
+      phone: profilePhone,
+      email: profileEmail,
+      membershipPlan: profilePlan,
+      membershipStartDate: profileStartDate,
+      membershipExpiryDate: profileExpiryDate,
+      status: profileStatus
     });
     setIsEditingProfile(false);
   };
@@ -119,6 +133,13 @@ export default function ClientProfileSidebar() {
                 setProfileLocation(activeClient.location);
                 setProfileHeight(activeClient.height);
                 setProfilePhoto(activeClient.photo);
+                setProfileMemberId(activeClient.memberId || '');
+                setProfilePhone(activeClient.phone || '');
+                setProfileEmail(activeClient.email || '');
+                setProfilePlan(activeClient.membershipPlan || 'Gold Monthly');
+                setProfileStartDate(activeClient.membershipStartDate || '');
+                setProfileExpiryDate(activeClient.membershipExpiryDate || '');
+                setProfileStatus(activeClient.status || 'Active');
                 setIsEditingProfile(true);
               }}
               className="text-gray-400 hover:text-[#00af87] p-1.5 rounded-lg transition-colors"
@@ -154,7 +175,7 @@ export default function ClientProfileSidebar() {
               </select>
             </div>
 
-            <div className="w-full text-left space-y-2">
+            <div className="w-full text-left space-y-2 max-h-[300px] overflow-y-auto pr-1">
               <div>
                 <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wide block">Name</label>
                 <input
@@ -170,6 +191,75 @@ export default function ClientProfileSidebar() {
                   type="text"
                   value={profileUsername}
                   onChange={(e) => setProfileUsername(e.target.value)}
+                  className="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 outline-none text-gray-800 font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wide block">Member ID</label>
+                <input
+                  type="text"
+                  value={profileMemberId}
+                  onChange={(e) => setProfileMemberId(e.target.value)}
+                  className="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 outline-none text-gray-800 font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wide block">Account Status</label>
+                <select
+                  value={profileStatus}
+                  onChange={(e) => setProfileStatus(e.target.value)}
+                  className="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 outline-none text-gray-700 font-medium cursor-pointer"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wide block">Phone</label>
+                <input
+                  type="text"
+                  value={profilePhone}
+                  onChange={(e) => setProfilePhone(e.target.value)}
+                  className="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 outline-none text-gray-800 font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wide block">Email</label>
+                <input
+                  type="email"
+                  value={profileEmail}
+                  onChange={(e) => setProfileEmail(e.target.value)}
+                  className="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 outline-none text-gray-800 font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wide block">Membership Plan</label>
+                <select
+                  value={profilePlan}
+                  onChange={(e) => setProfilePlan(e.target.value)}
+                  className="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 outline-none text-gray-700 font-medium cursor-pointer"
+                >
+                  <option value="Gold Monthly">Gold Monthly</option>
+                  <option value="Gold Yearly">Gold Yearly</option>
+                  <option value="Silver Monthly">Silver Monthly</option>
+                  <option value="Bronze Monthly">Bronze Monthly</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wide block">Start Date</label>
+                <input
+                  type="date"
+                  value={profileStartDate}
+                  onChange={(e) => setProfileStartDate(e.target.value)}
+                  className="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 outline-none text-gray-800 font-medium"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wide block">Expiry Date</label>
+                <input
+                  type="date"
+                  value={profileExpiryDate}
+                  onChange={(e) => setProfileExpiryDate(e.target.value)}
                   className="w-full text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 outline-none text-gray-800 font-medium"
                 />
               </div>
@@ -217,7 +307,44 @@ export default function ClientProfileSidebar() {
             <p className="text-xs text-[#00af87] font-semibold mb-1">{activeClient.username}</p>
             <p className="text-xs text-gray-400 font-medium mb-3">{activeClient.location}</p>
 
-            <div className="flex justify-between w-full border-t border-gray-50 pt-3 text-[11px] text-gray-500 font-medium px-2">
+            <div className="w-full border-t border-gray-100 pt-3 mt-1 text-left space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-gray-400 font-bold uppercase text-[9px] tracking-wide">Member ID</span>
+                <span className="text-gray-700 font-extrabold">{activeClient.memberId || 'GYM-N/A'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400 font-bold uppercase text-[9px] tracking-wide">Status</span>
+                <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${activeClient.status === 'Inactive' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-teal-50 text-[#00af87] border border-teal-100'}`}>
+                  {activeClient.status || 'Active'}
+                </span>
+              </div>
+              {activeClient.phone && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400 font-bold uppercase text-[9px] tracking-wide">Phone</span>
+                  <span className="text-gray-700 font-semibold">{activeClient.phone}</span>
+                </div>
+              )}
+              {activeClient.email && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400 font-bold uppercase text-[9px] tracking-wide">Email</span>
+                  <span className="text-gray-700 font-semibold truncate max-w-[150px]">{activeClient.email}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-gray-400 font-bold uppercase text-[9px] tracking-wide">Membership Plan</span>
+                <span className="text-gray-700 font-extrabold text-[#ff9f29]">{activeClient.membershipPlan || 'Gold Monthly'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400 font-bold uppercase text-[9px] tracking-wide">Start Date</span>
+                <span className="text-gray-700 font-semibold">{activeClient.membershipStartDate || activeClient.clientSince}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400 font-bold uppercase text-[9px] tracking-wide">Expiry Date</span>
+                <span className="text-gray-700 font-semibold">{activeClient.membershipExpiryDate || 'N/A'}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-between w-full border-t border-gray-100 pt-3 mt-3 text-[11px] text-gray-500 font-medium px-2">
               <span>Client est: <b className="text-gray-700">{activeClient.clientSince}</b></span>
               <span>Height: <b className="text-gray-700">{activeClient.height}</b></span>
             </div>

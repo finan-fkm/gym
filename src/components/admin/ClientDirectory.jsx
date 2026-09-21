@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGymState } from '../../context/GymStateContext';
-import { Search, UserPlus, Shield, User, MapPin, Scale, ChevronRight, MessageSquare, Plus, Check, X } from 'lucide-react';
+import { Search, UserPlus, MapPin, Scale, ChevronRight, Check, X } from 'lucide-react';
 
 export default function ClientDirectory() {
   const { clients, registerClient, setActiveClientId, setActiveTab } = useGymState();
@@ -17,6 +17,13 @@ export default function ClientDirectory() {
   const [fitnessLevel, setFitnessLevel] = useState('Moderate');
   const [equipmentPreference, setEquipmentPreference] = useState('Free Weights, Bodyweight');
   const [goalsString, setGoalsString] = useState('');
+  const [memberId, setMemberId] = useState(() => 'GYM' + Math.floor(1000 + Math.random() * 9000));
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [membershipPlan, setMembershipPlan] = useState('Gold Monthly');
+  const [membershipStartDate, setMembershipStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [membershipExpiryDate, setMembershipExpiryDate] = useState(new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]);
+  const [status, setStatus] = useState('Active');
 
   // Filtering
   const filteredClients = clients.filter(c => 
@@ -42,7 +49,14 @@ export default function ClientDirectory() {
       weight,
       fitnessLevel,
       equipmentPreference,
-      goals
+      goals,
+      memberId: memberId.trim() || ('GYM' + Math.floor(1000 + Math.random() * 9000)),
+      phone: phone.trim(),
+      email: email.trim(),
+      membershipPlan,
+      membershipStartDate,
+      membershipExpiryDate,
+      status
     });
 
     // Clear form
@@ -54,6 +68,13 @@ export default function ClientDirectory() {
     setFitnessLevel('Moderate');
     setEquipmentPreference('Free Weights, Bodyweight');
     setGoalsString('');
+    setMemberId('GYM' + Math.floor(1000 + Math.random() * 9000));
+    setPhone('');
+    setEmail('');
+    setMembershipPlan('Gold Monthly');
+    setMembershipStartDate(new Date().toISOString().split('T')[0]);
+    setMembershipExpiryDate(new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]);
+    setStatus('Active');
     setIsRegisterOpen(false);
   };
 
@@ -70,7 +91,7 @@ export default function ClientDirectory() {
       {/* Directory Title Banner */}
       <div className="bg-white rounded-3xl p-6 shadow-premium border border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-800 leading-tight">Registered Clients Directory</h2>
+          <h2 className="text-xl font-bold text-gray-800 leading-tight">Client Management</h2>
           <p className="text-xs text-gray-400 font-semibold mt-1">
             Viewing {filteredClients.length} of {clients.length} active client profiles.
           </p>
@@ -115,9 +136,21 @@ export default function ClientDirectory() {
                     className="w-14 h-14 rounded-2xl object-cover border border-gray-50 shadow-sm group-hover:scale-105 transition-transform duration-300"
                   />
                   <div>
-                    <h3 className="text-sm font-bold text-gray-800 tracking-wide leading-tight group-hover:text-[#00af87] transition-colors">{client.name}</h3>
-                    <p className="text-[10px] text-[#00af87] font-bold mt-0.5">{client.username}</p>
-                    <p className="text-[9px] text-gray-400 font-semibold mt-0.5 flex items-center gap-0.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h3 className="text-sm font-bold text-gray-800 tracking-wide leading-tight group-hover:text-[#00af87] transition-colors">{client.name}</h3>
+                      {client.status === 'Inactive' && (
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold bg-red-50 text-red-600 border border-red-100 uppercase">Inactive</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-[#00af87] font-bold mt-1 flex items-center gap-1.5 flex-wrap">
+                      {client.username}
+                      {client.passwordCreated ? (
+                        <span className="px-1.5 py-0.2 rounded-[4px] text-[8px] font-bold bg-teal-50 text-[#00af87] border border-teal-100">Registered</span>
+                      ) : (
+                        <span className="px-1.5 py-0.2 rounded-[4px] text-[8px] font-bold bg-amber-50 text-amber-600 border border-amber-100">Pending Setup</span>
+                      )}
+                    </p>
+                    <p className="text-[9px] text-gray-400 font-semibold mt-1 flex items-center gap-0.5">
                       <MapPin size={8} /> {client.location}
                     </p>
                   </div>
@@ -248,6 +281,88 @@ export default function ClientDirectory() {
                     placeholder="e.g. San Francisco, CA"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
+                    className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-[#00af87] text-gray-800 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide block mb-1.5">Member ID</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. GYM1001"
+                    value={memberId}
+                    onChange={(e) => setMemberId(e.target.value)}
+                    className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-[#00af87] text-gray-800 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide block mb-1.5">Account Status</label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-[#00af87] text-gray-700 font-medium cursor-pointer"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide block mb-1.5">Phone Number</label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. 555-0199"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-[#00af87] text-gray-800 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide block mb-1.5">Email Address</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. alex@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-[#00af87] text-gray-800 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide block mb-1.5">Plan</label>
+                  <select
+                    value={membershipPlan}
+                    onChange={(e) => setMembershipPlan(e.target.value)}
+                    className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-[#00af87] text-gray-700 font-medium cursor-pointer"
+                  >
+                    <option value="Gold Monthly">Gold Monthly</option>
+                    <option value="Gold Yearly">Gold Yearly</option>
+                    <option value="Silver Monthly">Silver Monthly</option>
+                    <option value="Bronze Monthly">Bronze Monthly</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide block mb-1.5">Start Date</label>
+                  <input
+                    type="date"
+                    value={membershipStartDate}
+                    onChange={(e) => setMembershipStartDate(e.target.value)}
+                    className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-[#00af87] text-gray-800 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide block mb-1.5">Expiry Date</label>
+                  <input
+                    type="date"
+                    value={membershipExpiryDate}
+                    onChange={(e) => setMembershipExpiryDate(e.target.value)}
                     className="w-full text-xs bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-[#00af87] text-gray-800 font-medium"
                   />
                 </div>

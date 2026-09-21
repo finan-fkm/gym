@@ -1,6 +1,6 @@
 import React from 'react';
 import { useGymState } from '../../context/GymStateContext';
-import { Home, Users, Dumbbell, MessageSquare, Shield, User, LogOut } from 'lucide-react';
+import { Home, Users, Dumbbell, MessageSquare, LogOut } from 'lucide-react';
 
 export default function Navbar() {
   const { currentRole, activeClient, clients, setActiveClientId, logout, activeTab, setActiveTab } = useGymState();
@@ -42,7 +42,7 @@ export default function Navbar() {
             }`}
           >
             <Users size={16} />
-            Clients
+            Client Management
           </button>
         )}
         <button className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-[#00af87] transition-all pb-1 border-b-2 border-transparent">

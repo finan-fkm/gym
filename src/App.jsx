@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from './components/common/Navbar';
 import ClientProfileSidebar from './components/admin/ClientProfileSidebar';
 import WorkoutTracker from './components/admin/WorkoutTracker';
@@ -7,19 +7,77 @@ import ClientDirectory from './components/admin/ClientDirectory';
 import ClientWorkoutPlay from './components/client/ClientWorkoutPlay';
 import ClientProgressCharts from './components/client/ClientProgressCharts';
 import ClientSessions from './components/client/ClientSessions';
-import LoginPage from './components/common/LoginPage';
+import AdminLoginPage from './components/common/AdminLoginPage';
+import ClientLoginPage from './components/common/ClientLoginPage';
+import ClientRegisterPage from './components/common/ClientRegisterPage';
 import { useGymState, GymStateProvider } from './context/GymStateContext';
 import { Dumbbell, TrendingUp, Calendar, AlertCircle } from 'lucide-react';
 
-function DashboardContainer() {
-  const { currentRole, activeClient, currentUser, activeTab } = useGymState();
-  const [clientTab, setClientTab] = useState('workout'); // 'workout', 'progress', 'sessions'
+function useRouter() {
+  const [path, setPath] = useState(window.location.pathname);
 
+  useEffect(() => {
+    const handlePopState = () => {
+      setPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigate = (to) => {
+    window.history.pushState({}, '', to);
+    setPath(to);
+  };
+
+  return { path, navigate };
+}
+
+function DashboardContainer() {
+  const { currentRole, activeClient, currentUser, activeTab, logout } = useGymState();
+  const [clientTab, setClientTab] = useState('workout'); // 'workout', 'progress', 'sessions'
+  const { path, navigate } = useRouter();
+
+  useEffect(() => {
+    if (currentUser) {
+      if (currentRole === 'admin') {
+        if (path !== '/admin/dashboard') {
+          navigate('/admin/dashboard');
+        }
+      } else if (currentRole === 'client') {
+        if (path.startsWith('/admin')) {
+          // Redirect client accessing admin url directly to /login/client after logging them out
+          logout();
+          navigate('/login/client');
+        } else if (path !== '/client/dashboard') {
+          navigate('/client/dashboard');
+        }
+      }
+    } else {
+      // Guest redirects
+      if (path !== '/login/admin' && path !== '/login/client' && path !== '/register/client') {
+        if (path.startsWith('/admin') || path === '/login/admin') {
+          navigate('/login/admin');
+        } else {
+          navigate('/login/client');
+        }
+      }
+    }
+  }, [currentUser, currentRole, path, navigate, logout]);
+
+  // Handle unauthenticated routes
   if (!currentUser) {
-    return <LoginPage />;
+    if (path === '/login/admin') {
+      return <AdminLoginPage onNavigate={navigate} />;
+    }
+    if (path === '/register/client') {
+      return <ClientRegisterPage onNavigate={navigate} />;
+    }
+    // Default fallback to client login
+    return <ClientLoginPage onNavigate={navigate} />;
   }
 
-  if (!activeClient) {
+  // Handle no clients (Admin view only checks)
+  if (currentRole === 'admin' && !activeClient) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
         <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-premium border border-gray-100 flex flex-col items-center gap-3">
@@ -67,13 +125,13 @@ function DashboardContainer() {
             {/* Top Info Banner for Client */}
             <div className="bg-white rounded-3xl p-5 shadow-premium border border-gray-100 flex items-center gap-4">
               <img
-                src={activeClient.photo}
-                alt={activeClient.name}
+                src={activeClient ? activeClient.photo : "/images/therese.webp"}
+                alt={activeClient ? activeClient.name : "Member"}
                 className="w-12 h-12 rounded-2xl object-cover border border-gray-100 shadow-sm"
               />
               <div>
                 <h4 className="text-[10px] text-gray-400 font-extrabold uppercase">Welcome back</h4>
-                <h3 className="text-base font-extrabold text-gray-800 leading-tight">{activeClient.name}</h3>
+                <h3 className="text-base font-extrabold text-gray-800 leading-tight">{activeClient ? activeClient.name : "Member"}</h3>
                 <p className="text-[10px] text-[#00af87] font-semibold mt-0.5">Trainer: Coach Brandon</p>
               </div>
             </div>

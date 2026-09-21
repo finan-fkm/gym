@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGymState } from '../../context/GymStateContext';
-import { FileText, Plus, Search, Calendar, ChevronDown, Check, X } from 'lucide-react';
+import { Plus, Search, Calendar, Check } from 'lucide-react';
 
 export default function NotesHistorySidebar() {
   const { activeClient, addNote } = useGymState();

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGymState } from '../../context/GymStateContext';
-import { Calendar, CheckCircle2, Circle, Clock, Plus, Trash2, Edit2, Link2, Unlink2, Check, X, Dumbbell, TrendingUp, Scale, Ruler, Award } from 'lucide-react';
+import { Calendar, CheckCircle2, Circle, Clock, Plus, Trash2, Edit2, Link2, Check, X, Dumbbell, TrendingUp, Scale, Ruler, Award } from 'lucide-react';
 import WorkoutEditorModal from './WorkoutEditorModal';
 
 export default function WorkoutTracker() {
@@ -9,7 +9,8 @@ export default function WorkoutTracker() {
     toggleExerciseCompletion,
     deleteExercise,
     updateNextSession,
-    updateWeeklyProgressFocus
+    updateWeeklyProgressFocus,
+    updateExercise
   } = useGymState();
 
   const [selectedDayId, setSelectedDayId] = useState('thu'); // default Thursday as per design
@@ -268,19 +269,18 @@ export default function WorkoutTracker() {
 
     if (currentEx.supersetId && nextEx.supersetId && currentEx.supersetId === nextEx.supersetId) {
       // Unlink them
-      const { updateExercise } = useGymState(); // use state setters
-      // Let's break the link
       exercises[idx].supersetId = null;
       exercises[idx + 1].supersetId = null;
+      updateExercise(activeClient.id, selectedDayId, currentEx.id, { supersetId: null });
+      updateExercise(activeClient.id, selectedDayId, nextEx.id, { supersetId: null });
     } else {
       // Link them
       const newSsId = 'ss_' + Date.now();
       exercises[idx].supersetId = newSsId;
       exercises[idx + 1].supersetId = newSsId;
+      updateExercise(activeClient.id, selectedDayId, currentEx.id, { supersetId: newSsId });
+      updateExercise(activeClient.id, selectedDayId, nextEx.id, { supersetId: newSsId });
     }
-    // trigger state update by forcing recalculation or calling updateExercise
-    // Since we are updating local references directly, let's call updateExercise to flush state to localStorage
-    const { updateExercise: flushUpdate } = useGymState();
   };
 
   // Grouping exercises by superset consecutive blocks

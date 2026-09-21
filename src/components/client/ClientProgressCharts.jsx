@@ -1,6 +1,6 @@
 import React from 'react';
 import { useGymState } from '../../context/GymStateContext';
-import { TrendingDown, Scale, Ruler, Award, CheckCircle2 } from 'lucide-react';
+import { TrendingDown, Scale, Ruler, CheckCircle2 } from 'lucide-react';
 
 export default function ClientProgressCharts() {
   const { activeClient } = useGymState();

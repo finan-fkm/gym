@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useGymState } from '../../context/GymStateContext';
-import { CheckCircle2, Circle, Flame, Dumbbell, Award, Timer, Sparkles, ChevronRight, Zap } from 'lucide-react';
+import { CheckCircle2, Circle, Flame, Award, Timer, Sparkles, Zap } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export default function ClientWorkoutPlay() {
@@ -107,7 +107,7 @@ export default function ClientWorkoutPlay() {
     return items;
   };
 
-  const renderClientExerciseCard = (ex, inSuperset = false) => {
+  const renderClientExerciseCard = (ex, _inSuperset = false) => {
     return (
       <div
         key={ex.id}
