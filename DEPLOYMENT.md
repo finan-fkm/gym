@@ -118,3 +118,24 @@ To verify the application is running correctly:
 ## Important Render Free-Tier Considerations
 - **Cold Starts**: Render's free Web Services spin down after 15 minutes of inactivity. When a new request arrives, it may take 50+ seconds for the backend to wake up. This is normal on the free tier.
 - **Database Expiration**: Render's free PostgreSQL databases expire after 90 days. If you plan to run this for long-term production, upgrade the database instance to the basic starter tier ($7/month).
+
+---
+
+## Deploying the Frontend to Vercel (Alternative / Recommended CDN)
+
+If you prefer hosting the React frontend on **Vercel** for ultra-fast global CDN performance:
+
+1. Go to [vercel.com](https://vercel.com) and log in with your **GitHub** account.
+2. Click **Add New...** &rarr; **Project**.
+3. Import your **`finan-fkm/gym`** GitHub repository.
+4. Configure Project Settings:
+   - **Framework Preset**: `Vite` (auto-detected)
+   - **Root Directory**: `./` (leave default)
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+5. Expand **Environment Variables** and add:
+   - `VITE_API_URL`: `https://<your-render-backend-url>.onrender.com`
+6. Click **Deploy**.
+
+The pre-configured `vercel.json` in the root automatically routes all URL paths (like `/admin/dashboard` or `/login/client`) to `index.html`, ensuring clean browser refreshes without 404 errors.
+
