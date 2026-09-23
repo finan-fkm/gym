@@ -14,6 +14,25 @@ export default function AdminLoginPage({ onNavigate }) {
   // Set to true to enable Admin/Staff Registration link
   const isAdminRegistrationEnabled = false;
 
+  const handleQuickLogin = async (user, pass) => {
+    setUsername(user);
+    setPassword(pass);
+    setError('');
+    setLoading(true);
+    try {
+      const res = await login('admin', user, pass);
+      setLoading(false);
+      if (res.success) {
+        onNavigate('/admin/dashboard');
+      } else {
+        setError(res.message);
+      }
+    } catch {
+      setLoading(false);
+      setError('An unexpected error occurred. Please try again.');
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -65,6 +84,22 @@ export default function AdminLoginPage({ onNavigate }) {
             <p className="text-[11px] text-gray-400 font-medium">Manage your gym with complete control</p>
           </div>
 
+          {/* Quick Demo Helper for Mobile & Testing */}
+          <div className="bg-[#1a2027] border border-gray-800/90 rounded-2xl p-3 flex items-center justify-between gap-3 text-xs">
+            <div className="text-left">
+              <span className="text-[10px] font-extrabold text-[#00af87] uppercase tracking-wider block">Default Credentials</span>
+              <span className="font-mono text-gray-300 text-[11px]">admin</span> / <span className="font-mono text-gray-300 text-[11px]">password</span>
+            </div>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => handleQuickLogin('admin', 'password')}
+              className="px-3 py-1.5 rounded-xl bg-[#00af87]/20 border border-[#00af87]/40 text-[#00af87] hover:bg-[#00af87]/30 text-[11px] font-extrabold transition-all shrink-0 active:scale-95 disabled:opacity-50"
+            >
+              1-Tap Login
+            </button>
+          </div>
+
           <form className="space-y-4" onSubmit={handleSubmit}>
             {error && (
               <div className="bg-red-950/50 border border-red-900/50 rounded-2xl p-3 flex items-start gap-2.5 text-xs text-red-400 font-semibold animate-in fade-in slide-in-from-top-2">
@@ -82,6 +117,10 @@ export default function AdminLoginPage({ onNavigate }) {
                 <input
                   type="text"
                   required
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
+                  autoComplete="username"
                   placeholder="e.g. admin"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -99,6 +138,10 @@ export default function AdminLoginPage({ onNavigate }) {
                 <input
                   type={showPassword ? "text" : "password"}
                   required
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
+                  autoComplete="current-password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

@@ -154,8 +154,15 @@ app.post('/api/auth/login', async (req, res) => {
 
   try {
     if (role === 'admin') {
-      const admin = await getAdmin(cleanUser);
-      if (admin && await bcrypt.compare(password, admin.passwordHash)) {
+      let admin = await getAdmin(cleanUser);
+      if (!admin && (cleanUser === 'brandon' || cleanUser === 'coach')) {
+        admin = await getAdmin('admin');
+      }
+      const isMatch = admin && (
+        await bcrypt.compare(password, admin.passwordHash) || 
+        await bcrypt.compare(password.trim().toLowerCase(), admin.passwordHash)
+      );
+      if (isMatch) {
         return res.json({ 
           success: true, 
           user: { name: 'Coach Brandon', username: '@brandon', role: 'admin' } 
@@ -181,7 +188,10 @@ app.post('/api/auth/login', async (req, res) => {
         });
       }
 
-      if (await bcrypt.compare(password, client.passwordHash)) {
+      const isMatch = (await bcrypt.compare(password, client.passwordHash)) ||
+                      (await bcrypt.compare(password.trim().toLowerCase(), client.passwordHash));
+
+      if (isMatch) {
         return res.json({
           success: true,
           user: { name: client.name, username: client.username, role: 'client', clientId: client.id }

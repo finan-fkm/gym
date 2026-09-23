@@ -11,7 +11,7 @@ export const initialClients = [
     membershipExpiryDate: "2027-01-10",
     status: "Active",
     passwordCreated: true,
-    passwordHash: "5e88376ec2949e29f3d952c109206116a47761122b1766e4e472271002540ea3", // SHA-256 of 'password'
+    passwordHash: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8", // SHA-256 of 'password'
     location: "Los Angeles, CA",
     clientSince: "2/23/17",
     height: "5'6\"",
@@ -215,7 +215,7 @@ export const initialClients = [
     membershipExpiryDate: "2026-08-15",
     status: "Active",
     passwordCreated: true,
-    passwordHash: "5e88376ec2949e29f3d952c109206116a47761122b1766e4e472271002540ea3", // SHA-256 of 'password'
+    passwordHash: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8", // SHA-256 of 'password'
     location: "San Francisco, CA",
     clientSince: "5/12/18",
     height: "6'1\"",

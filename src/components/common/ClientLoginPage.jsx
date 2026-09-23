@@ -96,7 +96,11 @@ export default function ClientLoginPage({ onNavigate }) {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. therese"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
+                  autoComplete="username"
+                  placeholder="e.g. @thespring or thespring"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full text-xs bg-gray-50/70 border border-gray-200 focus:border-[#ff9f29] rounded-xl pl-10 pr-4 py-3 outline-none transition-all text-gray-800 font-semibold"
@@ -113,6 +117,10 @@ export default function ClientLoginPage({ onNavigate }) {
                 <input
                   type={showPassword ? "text" : "password"}
                   required
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
+                  autoComplete="current-password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
