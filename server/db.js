@@ -5,8 +5,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const isPostgres = Boolean(process.env.DATABASE_URL);
-let pool = null;
+export const isPostgres = Boolean(process.env.DATABASE_URL);
+export let pool = null;
 
 // Determine JSON DB paths (support running from root or server dir)
 const getJsonPaths = () => {
@@ -27,12 +27,29 @@ const getPrimaryJsonPath = () => {
 
 // In-memory cache for JSON storage
 let jsonDb = {
+  users: [],
+  admins: [],
   clients: [],
-  admins: []
+  trainers: [],
+  workoutPlans: [],
+  workoutAssignments: [],
+  exercises: [],
+  exerciseAssignments: [],
+  workoutSessions: [],
+  workoutSets: [],
+  attendance: [],
+  membershipPlans: [],
+  memberships: [],
+  payments: [],
+  notifications: [],
+  passwordResetTokens: [],
+  settings: {}
 };
 
+export const getJsonDb = () => jsonDb;
+
 // Helper to save JSON database to all known disk locations to keep in sync
-const saveJsonDb = () => {
+export const saveJsonDb = () => {
   try {
     const primary = getPrimaryJsonPath();
     const content = JSON.stringify(jsonDb, null, 2);
@@ -248,7 +265,93 @@ export const initDb = async () => {
         );
       `);
 
-      // 11. Workout Sessions table
+      // 11. Users Authentication Table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          username TEXT UNIQUE NOT NULL,
+          email TEXT,
+          password_hash TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'CLIENT',
+          status TEXT DEFAULT 'Active',
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+
+      // 12. Trainers Table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS trainers (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          name TEXT NOT NULL,
+          email TEXT,
+          phone TEXT,
+          specialty TEXT,
+          bio TEXT,
+          photo TEXT,
+          status TEXT DEFAULT 'Active',
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+
+      // 13. Workout Plans Table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS workout_plans (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT,
+          category TEXT,
+          level TEXT DEFAULT 'Intermediate',
+          trainer_id TEXT,
+          duration_weeks INT DEFAULT 4,
+          days_per_week INT DEFAULT 5,
+          is_active BOOLEAN DEFAULT true,
+          raw_data JSONB DEFAULT '{}'::jsonb,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+
+      // 14. Workout Assignments Table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS workout_assignments (
+          id TEXT PRIMARY KEY,
+          client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+          plan_id TEXT,
+          day_key TEXT NOT NULL,
+          workout_name TEXT NOT NULL,
+          duration TEXT DEFAULT '45 mins',
+          notes TEXT,
+          status TEXT DEFAULT 'assigned',
+          assigned_by TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+
+      // 15. Exercise Assignments Table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS exercise_assignments (
+          id TEXT PRIMARY KEY,
+          workout_assignment_id TEXT,
+          client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+          exercise_id TEXT,
+          name TEXT NOT NULL,
+          sets INT DEFAULT 3,
+          target_reps TEXT DEFAULT '10',
+          suggested_weight_kg NUMERIC DEFAULT 0,
+          order_index INT DEFAULT 0,
+          superset_id TEXT,
+          status TEXT DEFAULT 'Not Started',
+          notes TEXT,
+          image TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+
+      // 16. Workout Sessions table
       await pool.query(`
         CREATE TABLE IF NOT EXISTS workout_sessions (
           id TEXT PRIMARY KEY,
@@ -265,7 +368,7 @@ export const initDb = async () => {
         );
       `);
 
-      // 12. Set Records table
+      // 17. Set Records & Workout Sets tables
       await pool.query(`
         CREATE TABLE IF NOT EXISTS set_records (
           id TEXT PRIMARY KEY,
@@ -282,11 +385,92 @@ export const initDb = async () => {
           status TEXT DEFAULT 'pending',
           completed_at TIMESTAMPTZ
         );
+
+        CREATE TABLE IF NOT EXISTS workout_sets (
+          id TEXT PRIMARY KEY,
+          session_id TEXT REFERENCES workout_sessions(id) ON DELETE CASCADE,
+          client_id TEXT REFERENCES clients(id) ON DELETE CASCADE,
+          workout_id TEXT,
+          day_key TEXT,
+          exercise_id TEXT NOT NULL,
+          exercise_name TEXT NOT NULL,
+          set_number INT NOT NULL,
+          target_reps INT DEFAULT 10,
+          actual_reps INT,
+          weight_kg NUMERIC,
+          status TEXT DEFAULT 'pending',
+          completed_at TIMESTAMPTZ,
+          notes TEXT
+        );
+      `);
+
+      // 18. Membership Plans table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS membership_plans (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          price NUMERIC NOT NULL,
+          duration_months INT NOT NULL DEFAULT 1,
+          description TEXT,
+          features JSONB DEFAULT '[]'::jsonb,
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+
+      // 19. Memberships table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS memberships (
+          id TEXT PRIMARY KEY,
+          client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+          plan_id TEXT,
+          plan_name TEXT NOT NULL,
+          start_date DATE NOT NULL,
+          expiry_date DATE NOT NULL,
+          status TEXT DEFAULT 'Active',
+          price NUMERIC NOT NULL DEFAULT 0,
+          auto_renew BOOLEAN DEFAULT false,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+
+      // 20. Payments table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS payments (
+          id TEXT PRIMARY KEY,
+          client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+          membership_id TEXT,
+          amount NUMERIC NOT NULL,
+          currency TEXT DEFAULT 'USD',
+          payment_method TEXT DEFAULT 'Credit Card',
+          payment_status TEXT DEFAULT 'Completed',
+          transaction_id TEXT,
+          invoice_number TEXT,
+          payment_date TIMESTAMPTZ DEFAULT NOW(),
+          notes TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+      `);
+
+      // 21. Notifications table
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS notifications (
+          id TEXT PRIMARY KEY,
+          client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+          title TEXT NOT NULL,
+          message TEXT NOT NULL,
+          type TEXT DEFAULT 'info',
+          is_read BOOLEAN DEFAULT false,
+          link TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
       `);
 
       // Indexes for performance
       await pool.query(`
         CREATE INDEX IF NOT EXISTS idx_clients_username ON clients(username);
+        CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
         CREATE INDEX IF NOT EXISTS idx_workouts_client ON workouts(client_id);
         CREATE INDEX IF NOT EXISTS idx_exercises_workout ON exercises(workout_id);
         CREATE INDEX IF NOT EXISTS idx_measurements_client ON body_measurements(client_id);
@@ -297,6 +481,9 @@ export const initDb = async () => {
         CREATE INDEX IF NOT EXISTS idx_sessions_client ON workout_sessions(client_id);
         CREATE INDEX IF NOT EXISTS idx_set_records_session ON set_records(session_id);
         CREATE INDEX IF NOT EXISTS idx_set_records_client ON set_records(client_id);
+        CREATE INDEX IF NOT EXISTS idx_memberships_client ON memberships(client_id);
+        CREATE INDEX IF NOT EXISTS idx_payments_client ON payments(client_id);
+        CREATE INDEX IF NOT EXISTS idx_notifications_client ON notifications(client_id);
       `);
 
       console.log('PostgreSQL relational tables and indexes initialized successfully.');
@@ -313,15 +500,30 @@ export const initDb = async () => {
         jsonDb = JSON.parse(raw);
         if (!Array.isArray(jsonDb.clients)) jsonDb.clients = [];
         if (!Array.isArray(jsonDb.admins)) jsonDb.admins = [];
+        if (!Array.isArray(jsonDb.users)) jsonDb.users = [];
+        if (!Array.isArray(jsonDb.trainers)) jsonDb.trainers = [];
+        if (!Array.isArray(jsonDb.workoutPlans)) jsonDb.workoutPlans = [];
+        if (!Array.isArray(jsonDb.workoutAssignments)) jsonDb.workoutAssignments = [];
+        if (!Array.isArray(jsonDb.exercises)) jsonDb.exercises = [];
+        if (!Array.isArray(jsonDb.exerciseAssignments)) jsonDb.exerciseAssignments = [];
+        if (!Array.isArray(jsonDb.workoutSessions)) jsonDb.workoutSessions = [];
+        if (!Array.isArray(jsonDb.workoutSets)) jsonDb.workoutSets = [];
+        if (!Array.isArray(jsonDb.attendance)) jsonDb.attendance = [];
+        if (!Array.isArray(jsonDb.membershipPlans)) jsonDb.membershipPlans = [];
+        if (!Array.isArray(jsonDb.memberships)) jsonDb.memberships = [];
+        if (!Array.isArray(jsonDb.payments)) jsonDb.payments = [];
+        if (!Array.isArray(jsonDb.notifications)) jsonDb.notifications = [];
+        if (!Array.isArray(jsonDb.passwordResetTokens)) jsonDb.passwordResetTokens = [];
+        if (!jsonDb.settings || typeof jsonDb.settings !== 'object') jsonDb.settings = {};
         console.log(`Loaded JSON database from: ${primary} (${jsonDb.clients.length} clients, ${jsonDb.admins.length} admins)`);
       } catch (err) {
         console.warn('Failed to parse database.json. Initializing fresh JSON db structure.', err);
-        jsonDb = { clients: [], admins: [] };
+        jsonDb = { clients: [], admins: [], users: [], trainers: [], attendance: [], membershipPlans: [], memberships: [], payments: [], notifications: [], passwordResetTokens: [], settings: {} };
         saveJsonDb();
       }
     } else {
       console.log('Creating initial database.json file.');
-      jsonDb = { clients: [], admins: [] };
+      jsonDb = { clients: [], admins: [], users: [], trainers: [], attendance: [], membershipPlans: [], memberships: [], payments: [], notifications: [], passwordResetTokens: [], settings: {} };
       saveJsonDb();
     }
   }
@@ -1373,5 +1575,8 @@ export const getProgressComparison = async (clientId) => {
     allSessions: sessions
   };
 };
+
+// Re-export all database services for unified access
+export * from './dbServices.js';
 
 

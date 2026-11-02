@@ -4,14 +4,20 @@ import ClientProfileSidebar from './components/admin/ClientProfileSidebar';
 import WorkoutTracker from './components/admin/WorkoutTracker';
 import NotesHistorySidebar from './components/admin/NotesHistorySidebar';
 import ClientDirectory from './components/admin/ClientDirectory';
+import AdminDashboard from './components/admin/AdminDashboard';
+import AdminAttendance from './components/admin/AdminAttendance';
+import AdminBillingMemberships from './components/admin/AdminBillingMemberships';
+import AdminSettings from './components/admin/AdminSettings';
 import ClientWorkoutPlay from './components/client/ClientWorkoutPlay';
 import ClientProgressCharts from './components/client/ClientProgressCharts';
 import ClientSessions from './components/client/ClientSessions';
+import ClientAttendanceTab from './components/client/ClientAttendanceTab';
+import ClientProfileTab from './components/client/ClientProfileTab';
 import AdminLoginPage from './components/common/AdminLoginPage';
 import ClientLoginPage from './components/common/ClientLoginPage';
 import ClientRegisterPage from './components/common/ClientRegisterPage';
 import { useGymState, GymStateProvider } from './context/GymStateContext';
-import { Dumbbell, TrendingUp, Calendar, AlertCircle } from 'lucide-react';
+import { Dumbbell, TrendingUp, Calendar, AlertCircle, CalendarCheck, User } from 'lucide-react';
 
 function useRouter() {
   const [path, setPath] = useState(window.location.pathname);
@@ -109,9 +115,21 @@ function DashboardContainer() {
       {/* Main Dashboard Panel */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 md:px-6 py-6 transition-all duration-300">
         {currentRole === 'admin' ? (
-          activeTab === 'clients' ? (
-            /* Trainer View - Clients Directory Grid */
+          activeTab === 'dashboard' ? (
+            /* Admin KPI Command Center */
+            <AdminDashboard />
+          ) : activeTab === 'clients' ? (
+            /* Admin Client Directory & Registration */
             <ClientDirectory />
+          ) : activeTab === 'attendance' ? (
+            /* Admin Attendance Management */
+            <AdminAttendance />
+          ) : activeTab === 'billing' ? (
+            /* Admin Membership & Payment Center */
+            <AdminBillingMemberships />
+          ) : activeTab === 'settings' ? (
+            /* Admin Settings & Credentials */
+            <AdminSettings />
           ) : (
             /* Trainer/Admin View - 3 Column Layout */
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -149,39 +167,61 @@ function DashboardContainer() {
             </div>
 
             {/* Tab Bar Selector (Mobile Layout) */}
-            <div className="grid grid-cols-3 bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100 text-center">
+            <div className="grid grid-cols-5 bg-white rounded-2xl p-1.5 shadow-sm border border-gray-100 text-center gap-1">
               <button
                 onClick={() => setClientTab('workout')}
-                className={`py-2.5 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-1 ${
+                className={`py-2 rounded-xl text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${
                   clientTab === 'workout'
                     ? 'bg-[#00af87]/10 text-[#00af87]'
                     : 'text-gray-400 hover:text-gray-700'
                 }`}
               >
-                <Dumbbell size={16} />
+                <Dumbbell size={15} />
                 Workout
               </button>
               <button
                 onClick={() => setClientTab('progress')}
-                className={`py-2.5 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-1 ${
+                className={`py-2 rounded-xl text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${
                   clientTab === 'progress'
                     ? 'bg-[#00af87]/10 text-[#00af87]'
                     : 'text-gray-400 hover:text-gray-700'
                 }`}
               >
-                <TrendingUp size={16} />
-                My Progress
+                <TrendingUp size={15} />
+                Progress
               </button>
               <button
                 onClick={() => setClientTab('sessions')}
-                className={`py-2.5 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-1 ${
+                className={`py-2 rounded-xl text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${
                   clientTab === 'sessions'
                     ? 'bg-[#00af87]/10 text-[#00af87]'
                     : 'text-gray-400 hover:text-gray-700'
                 }`}
               >
-                <Calendar size={16} />
+                <Calendar size={15} />
                 Sessions
+              </button>
+              <button
+                onClick={() => setClientTab('attendance')}
+                className={`py-2 rounded-xl text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${
+                  clientTab === 'attendance'
+                    ? 'bg-[#00af87]/10 text-[#00af87]'
+                    : 'text-gray-400 hover:text-gray-700'
+                }`}
+              >
+                <CalendarCheck size={15} />
+                Check-in
+              </button>
+              <button
+                onClick={() => setClientTab('profile')}
+                className={`py-2 rounded-xl text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${
+                  clientTab === 'profile'
+                    ? 'bg-[#00af87]/10 text-[#00af87]'
+                    : 'text-gray-400 hover:text-gray-700'
+                }`}
+              >
+                <User size={15} />
+                Profile
               </button>
             </div>
 
@@ -190,6 +230,8 @@ function DashboardContainer() {
               {clientTab === 'workout' && <ClientWorkoutPlay />}
               {clientTab === 'progress' && <ClientProgressCharts />}
               {clientTab === 'sessions' && <ClientSessions />}
+              {clientTab === 'attendance' && <ClientAttendanceTab />}
+              {clientTab === 'profile' && <ClientProfileTab />}
             </div>
           </div>
         )}

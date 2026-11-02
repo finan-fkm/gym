@@ -569,6 +569,213 @@ async function runSuite() {
     assertCheck(typeof compData.weightDelta === 'number', `Weight progression volume delta computed (${compData.weightDelta} kg)`);
     assertCheck(Array.isArray(compData.exerciseComparisons) && compData.exerciseComparisons.length > 0, 'Exercise-by-exercise comparison generated');
 
+    // -------------------------------------------------------------------------
+    // 12/12. Complete Gym Management System REST APIs & Security Suite
+    // -------------------------------------------------------------------------
+    console.log('\n[12/12] Testing Full Admin & Client Backend REST Endpoints & Security...');
+
+    // A. Dedicated Auth Endpoints
+    const dedicatedAdminLoginRes = await fetch(`${BASE_URL}/api/auth/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'password' })
+    });
+    const dedicatedAdminLoginData = await dedicatedAdminLoginRes.json();
+    assertCheck(dedicatedAdminLoginRes.status === 200 && dedicatedAdminLoginData.token, 'POST /api/auth/admin/login issues valid admin token');
+
+    const dedicatedClientLoginRes = await fetch(`${BASE_URL}/api/auth/client/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: '@thespring', password: 'password' })
+    });
+    const dedicatedClientLoginData = await dedicatedClientLoginRes.json();
+    assertCheck(dedicatedClientLoginRes.status === 200 && dedicatedClientLoginData.token, 'POST /api/auth/client/login issues valid client token');
+
+    const logoutRes = await fetch(`${BASE_URL}/api/auth/logout`, { method: 'POST' });
+    const logoutData = await logoutRes.json();
+    assertCheck(logoutRes.status === 200 && logoutData.success, 'POST /api/auth/logout succeeds');
+
+    // B. Admin Dashboard KPIs
+    const adminDashRes = await fetch(`${BASE_URL}/api/admin/dashboard`, {
+      headers: { 'Authorization': `Bearer ${dedicatedAdminLoginData.token}` }
+    });
+    const adminDashData = await adminDashRes.json();
+    assertCheck(adminDashRes.status === 200 && adminDashData.success, 'GET /api/admin/dashboard returns HTTP 200');
+    assertCheck(adminDashData.overview && adminDashData.overview.totalClients >= 1, 'Admin overview provides total client count');
+    assertCheck(adminDashData.membershipStats && typeof adminDashData.membershipStats.active === 'number', 'Membership expiry statistics present in dashboard');
+    assertCheck(adminDashData.workoutStats && typeof adminDashData.workoutStats.totalSessions === 'number', 'Workout statistics present in dashboard');
+
+    // Cross-Role Security Boundary: Client cannot access Admin Dashboard
+    const forbiddenDashRes = await fetch(`${BASE_URL}/api/admin/dashboard`, {
+      headers: { 'Authorization': `Bearer ${dedicatedClientLoginData.token}` }
+    });
+    assertCheck(forbiddenDashRes.status === 403, 'Client account strictly forbidden from Admin Dashboard (HTTP 403)');
+
+    // C. Admin Attendance Management & Duplicate Prevention
+    const testDate = '2026-11-02';
+    const adminAttRes1 = await fetch(`${BASE_URL}/api/admin/attendance`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${dedicatedAdminLoginData.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        clientId: 'john_doe',
+        date: testDate,
+        sessionName: 'Strength & Conditioning',
+        signature: 'COACH_BRANDON'
+      })
+    });
+    assertCheck(adminAttRes1.status === 201 || adminAttRes1.status === 409, 'POST /api/admin/attendance records check-in or flags duplicate');
+
+    // Second check-in on same date must be rejected as duplicate
+    const adminAttRes2 = await fetch(`${BASE_URL}/api/admin/attendance`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${dedicatedAdminLoginData.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        clientId: 'john_doe',
+        date: testDate,
+        sessionName: 'Strength & Conditioning',
+        signature: 'COACH_BRANDON'
+      })
+    });
+    assertCheck(adminAttRes2.status === 409, 'Duplicate attendance on same date strictly prevented with HTTP 409 Conflict');
+
+    // D. Admin Membership Plans & Assignments
+    const plansRes = await fetch(`${BASE_URL}/api/admin/membership-plans`, {
+      headers: { 'Authorization': `Bearer ${dedicatedAdminLoginData.token}` }
+    });
+    const plansData = await plansRes.json();
+    assertCheck(plansRes.status === 200 && Array.isArray(plansData.plans), 'GET /api/admin/membership-plans returns tiers');
+
+    const assignMemRes = await fetch(`${BASE_URL}/api/admin/memberships`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${dedicatedAdminLoginData.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        clientId: 'therese_spring',
+        planName: 'Platinum Annual',
+        startDate: '2026-11-01',
+        expiryDate: '2027-11-01',
+        price: 899,
+        autoRenew: true
+      })
+    });
+    const assignMemData = await assignMemRes.json();
+    assertCheck(assignMemRes.status === 201 && assignMemData.success, 'POST /api/admin/memberships assigns membership to client');
+
+    const renewMemRes = await fetch(`${BASE_URL}/api/admin/memberships/${assignMemData.membership.id}/renew`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${dedicatedAdminLoginData.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ extensionMonths: 3 })
+    });
+    assertCheck(renewMemRes.status === 200, 'POST /api/admin/memberships/:id/renew extends membership duration');
+
+    // E. Admin Payments & Invoicing
+    const payRes = await fetch(`${BASE_URL}/api/admin/payments`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${dedicatedAdminLoginData.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        clientId: 'therese_spring',
+        amount: 899,
+        currency: 'USD',
+        paymentMethod: 'Credit Card',
+        notes: 'Platinum Annual Renewal Payment'
+      })
+    });
+    const payData = await payRes.json();
+    assertCheck(payRes.status === 201 && payData.payment.invoiceNumber, 'POST /api/admin/payments records payment and generates invoice');
+
+    const listPayRes = await fetch(`${BASE_URL}/api/admin/payments`, {
+      headers: { 'Authorization': `Bearer ${dedicatedAdminLoginData.token}` }
+    });
+    const listPayData = await listPayRes.json();
+    assertCheck(listPayRes.status === 200 && listPayData.payments.length >= 1, 'GET /api/admin/payments returns transaction ledger');
+
+    // F. Admin Settings & Trainers
+    const trainersRes = await fetch(`${BASE_URL}/api/admin/trainers`, {
+      headers: { 'Authorization': `Bearer ${dedicatedAdminLoginData.token}` }
+    });
+    const trainersData = await trainersRes.json();
+    assertCheck(trainersRes.status === 200 && trainersData.trainers.length >= 1, 'GET /api/admin/trainers lists coaches');
+
+    const settingsRes = await fetch(`${BASE_URL}/api/admin/settings`, {
+      headers: { 'Authorization': `Bearer ${dedicatedAdminLoginData.token}` }
+    });
+    const settingsData = await settingsRes.json();
+    assertCheck(settingsRes.status === 200 && settingsData.settings.gymName, 'GET /api/admin/settings returns gym config');
+
+    // G. Client Dashboard, Profile, Attendance & Notifications
+    const clientDashRes = await fetch(`${BASE_URL}/api/client/dashboard`, {
+      headers: { 'Authorization': `Bearer ${dedicatedClientLoginData.token}` }
+    });
+    const clientDashData = await clientDashRes.json();
+    assertCheck(clientDashRes.status === 200 && clientDashData.client.id === 'therese_spring', 'GET /api/client/dashboard loads authenticated client data');
+    assertCheck(clientDashData.membership && clientDashData.membership.plan, 'Client dashboard includes membership details and expiry');
+    assertCheck(clientDashData.stats && typeof clientDashData.stats.totalWorkoutsCompleted === 'number', 'Client dashboard aggregates workout stats');
+
+    const clientProfileRes = await fetch(`${BASE_URL}/api/client/profile`, {
+      headers: { 'Authorization': `Bearer ${dedicatedClientLoginData.token}` }
+    });
+    const clientProfileData = await clientProfileRes.json();
+    assertCheck(clientProfileRes.status === 200 && clientProfileData.client.name, 'GET /api/client/profile retrieves client personal data');
+
+    const clientAttRes = await fetch(`${BASE_URL}/api/client/attendance`, {
+      headers: { 'Authorization': `Bearer ${dedicatedClientLoginData.token}` }
+    });
+    const clientAttData = await clientAttRes.json();
+    assertCheck(clientAttRes.status === 200 && clientAttData.summary, 'GET /api/client/attendance returns personal attendance history & summary');
+
+    const notifsRes = await fetch(`${BASE_URL}/api/client/notifications`, {
+      headers: { 'Authorization': `Bearer ${dedicatedClientLoginData.token}` }
+    });
+    const notifsData = await notifsRes.json();
+    assertCheck(notifsRes.status === 200 && Array.isArray(notifsData.notifications), 'GET /api/client/notifications returns notifications');
+
+    // H. Client Workout Sessions & Set Tracking via REST
+    const clientWorkoutSessRes = await fetch(`${BASE_URL}/api/client/workout-sessions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${dedicatedClientLoginData.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        workoutName: 'Client Self Logged Routine',
+        durationSeconds: 1500,
+        summary: { totalExercises: 2, totalSets: 6, totalReps: 60, totalWeightKg: 400 }
+      })
+    });
+    const clientWorkoutSessData = await clientWorkoutSessRes.json();
+    assertCheck(clientWorkoutSessRes.status === 201 && clientWorkoutSessData.session.clientId === 'therese_spring', 'POST /api/client/workout-sessions binds to authenticated client');
+
+    const clientSetRes = await fetch(`${BASE_URL}/api/client/workout-sets`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${dedicatedClientLoginData.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        dayKey: 'thu',
+        exerciseId: 'ex_1',
+        setNumber: 1,
+        actualReps: 12,
+        weight: 15,
+        status: 'completed'
+      })
+    });
+    assertCheck(clientSetRes.status === 201, 'POST /api/client/workout-sets logs set progress for client');
+
     console.log('\n====================================================');
     console.log(`ALL AUTOMATED TESTS PASSED: ${passedChecks}/${totalChecks} CHECKS VERIFIED (100%)`);
     console.log('====================================================');

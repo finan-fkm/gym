@@ -288,3 +288,122 @@ export const initialClients = [
     ]
   }
 ];
+
+export const initialTrainers = [
+  {
+    id: "trainer_brandon",
+    name: "Coach Brandon",
+    email: "brandon@fitbyshahid.com",
+    phone: "+1 (555) 012-4433",
+    specialty: "Strength & Hypertrophy",
+    bio: "Certified CSCS coach with 8+ years coaching athletes and fitness enthusiasts.",
+    photo: "/images/john.webp",
+    status: "Active"
+  },
+  {
+    id: "trainer_sarah",
+    name: "Coach Sarah",
+    email: "sarah@fitbyshahid.com",
+    phone: "+1 (555) 012-4488",
+    specialty: "HIIT, Mobility & Rehab",
+    bio: "Former collegiate athlete focused on joint resilience and functional movement.",
+    photo: "/images/therese.webp",
+    status: "Active"
+  }
+];
+
+export const initialMembershipPlans = [
+  {
+    id: "plan_silver",
+    name: "Silver Monthly",
+    price: 69,
+    durationMonths: 1,
+    description: "Standard gym floor access and cardio equipment.",
+    features: ["Gym Floor Access", "Locker Room & Showers", "Free Mobile App Access"],
+    isActive: true
+  },
+  {
+    id: "plan_gold",
+    name: "Gold Monthly",
+    price: 99,
+    durationMonths: 1,
+    description: "Full access including all classes, weekly trainer review, and priority booking.",
+    features: ["All Silver Features", "Unlimited Group Classes", "1-on-1 Monthly Coach Check-in", "Free Guest Passes (2/mo)"],
+    isActive: true
+  },
+  {
+    id: "plan_platinum",
+    name: "Platinum Annual",
+    price: 899,
+    durationMonths: 12,
+    description: "VIP annual package with personalized nutrition plans and dedicated coach support.",
+    features: ["All Gold Features", "Personalized Nutrition Guide", "Quarterly Body Composition Scans", "VIP Locker", "20% Pro-Shop Discount"],
+    isActive: true
+  }
+];
+
+export const initialGymSettings = {
+  gymName: "FIT_BY_SHAHID",
+  brandTagline: "Elite Personal Training & Athletic Conditioning",
+  email: "contact@fitbyshahid.com",
+  phone: "+1 (555) 019-2834",
+  address: "10880 Wilshire Blvd, Los Angeles, CA 90024",
+  currency: "USD",
+  currencySymbol: "$",
+  businessHours: "Mon-Fri: 5:00 AM - 11:00 PM, Sat-Sun: 7:00 AM - 9:00 PM",
+  allowClientSelfRegistration: true,
+  requireAttendanceSignature: true
+};
+
+export const initialNotifications = [
+  {
+    id: "notif_welcome",
+    clientId: "therese_spring",
+    title: "Welcome to Fit By Shahid",
+    message: "Your account is active. Check out your assigned Lower Body Burn workout!",
+    type: "announcement",
+    isRead: false,
+    link: "/client/dashboard",
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: "notif_membership",
+    clientId: "therese_spring",
+    title: "Membership Active",
+    message: "Your Gold Monthly membership is active through Jan 10, 2027.",
+    type: "membership",
+    isRead: true,
+    link: "/client/dashboard",
+    createdAt: new Date(Date.now() - 86400000).toISOString()
+  }
+];
+
+export const initialPayments = [
+  {
+    id: "pay_101",
+    clientId: "therese_spring",
+    membershipId: "mem_therese",
+    amount: 99,
+    currency: "USD",
+    paymentMethod: "Credit Card",
+    paymentStatus: "Completed",
+    transactionId: "TXN_789412",
+    invoiceNumber: "INV-2026-001",
+    paymentDate: new Date(Date.now() - 5 * 86400000).toISOString(),
+    notes: "Gold Monthly subscription renewal"
+  },
+  {
+    id: "pay_102",
+    clientId: "john_doe",
+    membershipId: "mem_john",
+    amount: 69,
+    currency: "USD",
+    paymentMethod: "Bank Transfer",
+    paymentStatus: "Completed",
+    transactionId: "TXN_789413",
+    invoiceNumber: "INV-2026-002",
+    paymentDate: new Date(Date.now() - 12 * 86400000).toISOString(),
+    notes: "Silver Monthly subscription payment"
+  }
+];
+

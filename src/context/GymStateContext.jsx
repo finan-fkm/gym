@@ -61,7 +61,17 @@ export const GymStateProvider = ({ children }) => {
     return initialClients[0]?.id || '';
   });
 
-  const [activeTab, setActiveTab] = useState('home'); // 'home' or 'clients' for admin
+  const [activeTab, setActiveTab] = useState('home'); // 'home', 'clients', 'attendance', 'billing', 'settings' for admin
+  const [adminDashboardStats, setAdminDashboardStats] = useState(null);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [membershipPlans, setMembershipPlans] = useState([]);
+  const [membershipsList, setMembershipsList] = useState([]);
+  const [paymentsList, setPaymentsList] = useState([]);
+  const [trainersList, setTrainersList] = useState([]);
+  const [gymSettings, setGymSettings] = useState(null);
+  const [clientDashboardData, setClientDashboardData] = useState(null);
+  const [clientNotifications, setClientNotifications] = useState([]);
+  const [clientAttendanceSummary, setClientAttendanceSummary] = useState(null);
 
   // Helper to fetch clients list as Admin
   const fetchAdminClients = useCallback(async (token) => {
@@ -216,17 +226,30 @@ export const GymStateProvider = ({ children }) => {
     }
   };
 
-  // Auth: Login with Remember Me support
+  // Auth: Universal Login with Dedicated Portal Route Fallback
   const login = async (role, username, password, rememberMe = false) => {
     const rawUser = (username || '').trim();
     const cleanPass = (password || '').trim();
 
+    const targetUrl = role === 'admin' 
+      ? `${API_URL}/api/auth/admin/login` 
+      : `${API_URL}/api/auth/client/login`;
+
     try {
-      const res = await fetch(`${API_URL}/api/auth/login`, {
+      let res = await fetch(targetUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role, username: rawUser, password: cleanPass, rememberMe })
       });
+
+      // Fallback to /api/auth/login if specific endpoint returns 404
+      if (res.status === 404) {
+        res = await fetch(`${API_URL}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role, username: rawUser, password: cleanPass, rememberMe })
+        });
+      }
 
       const data = await res.json();
       if (res.ok && data.success && data.token) {
@@ -274,8 +297,22 @@ export const GymStateProvider = ({ children }) => {
     }
   };
 
+  const loginAdmin = (username, password, rememberMe = false) => login('admin', username, password, rememberMe);
+  const loginClient = (username, password, rememberMe = false) => login('client', username, password, rememberMe);
+
   // Auth: Logout (Clears all tokens and session data)
-  const logout = () => {
+  const logout = async () => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (token) {
+      try {
+        await fetch(`${API_URL}/api/auth/logout`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      } catch {
+        // Ignore network failure on logout
+      }
+    }
     localStorage.removeItem('gymweb_token');
     localStorage.removeItem('gymweb_user');
     sessionStorage.removeItem('gymweb_token');
@@ -283,6 +320,444 @@ export const GymStateProvider = ({ children }) => {
     setAuthToken('');
     setCurrentUser(null);
     setCurrentRole('client');
+  };
+
+  // Auth: Change Password
+  const changePassword = async (currentPassword, newPassword) => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return { success: false, message: 'Authentication required' };
+    try {
+      const res = await fetch(`${API_URL}/api/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ currentPassword, newPassword })
+      });
+      return await res.json();
+    } catch (err) {
+      console.error('Change password error:', err);
+      return { success: false, message: 'Server communication error' };
+    }
+  };
+
+  // Admin: Fetch Dashboard KPI Stats
+  const fetchAdminDashboardStats = async () => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return null;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/dashboard`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAdminDashboardStats(data);
+        return data;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch admin dashboard stats:', err);
+    }
+    return null;
+  };
+
+  // Admin: Fetch Attendance Records
+  const fetchAttendanceRecords = async (params = {}) => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return [];
+    try {
+      const qs = new URLSearchParams(params).toString();
+      const res = await fetch(`${API_URL}/api/admin/attendance${qs ? '?' + qs : ''}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAttendanceRecords(data.attendance || []);
+        return data.attendance;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch attendance records:', err);
+    }
+    return [];
+  };
+
+  // Admin: Manually Mark Attendance
+  const markAdminAttendance = async ({ clientId, date, sessionName, signature }) => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return { success: false, message: 'Authentication required' };
+    try {
+      const res = await fetch(`${API_URL}/api/admin/attendance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ clientId, date, sessionName, signature })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await fetchAttendanceRecords();
+        return { success: true, record: data.record };
+      }
+      return { success: false, message: data.message || 'Failed to mark attendance' };
+    } catch (err) {
+      console.error('Error marking admin attendance:', err);
+      return { success: false, message: 'Server communication error' };
+    }
+  };
+
+  // Admin: Membership Plans
+  const fetchMembershipPlans = async () => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return [];
+    try {
+      const res = await fetch(`${API_URL}/api/admin/membership-plans`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMembershipPlans(data.plans || []);
+        return data.plans;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch membership plans:', err);
+    }
+    return [];
+  };
+
+  const saveMembershipPlan = async (plan) => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return null;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/membership-plans`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(plan)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        await fetchMembershipPlans();
+        return data.plan;
+      }
+    } catch (err) {
+      console.error('Failed to save membership plan:', err);
+    }
+    return null;
+  };
+
+  // Admin: Memberships
+  const fetchMemberships = async (params = {}) => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return [];
+    try {
+      const qs = new URLSearchParams(params).toString();
+      const res = await fetch(`${API_URL}/api/admin/memberships${qs ? '?' + qs : ''}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMembershipsList(data.memberships || []);
+        return data.memberships;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch memberships:', err);
+    }
+    return [];
+  };
+
+  const assignMembership = async (payload) => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return null;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/memberships`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        await fetchMemberships();
+        await fetchAdminClients(token);
+        return data.membership;
+      }
+    } catch (err) {
+      console.error('Failed to assign membership:', err);
+    }
+    return null;
+  };
+
+  const renewMembership = async (membershipId, extensionMonths = 1) => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return null;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/memberships/${membershipId}/renew`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ extensionMonths })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        await fetchMemberships();
+        await fetchAdminClients(token);
+        return data.membership;
+      }
+    } catch (err) {
+      console.error('Failed to renew membership:', err);
+    }
+    return null;
+  };
+
+  // Admin: Payments
+  const fetchPayments = async (params = {}) => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return [];
+    try {
+      const qs = new URLSearchParams(params).toString();
+      const res = await fetch(`${API_URL}/api/admin/payments${qs ? '?' + qs : ''}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPaymentsList(data.payments || []);
+        return data.payments;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch payments:', err);
+    }
+    return [];
+  };
+
+  const recordPayment = async (payload) => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return null;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/payments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        await fetchPayments();
+        await fetchAdminDashboardStats();
+        return data.payment;
+      }
+    } catch (err) {
+      console.error('Failed to record payment:', err);
+    }
+    return null;
+  };
+
+  // Admin: Reset Client Password
+  const resetClientPassword = async (clientId, newPassword = 'password') => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return { success: false, message: 'Authentication required' };
+    try {
+      const res = await fetch(`${API_URL}/api/admin/clients/${clientId}/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ newPassword })
+      });
+      return await res.json();
+    } catch (err) {
+      console.error('Failed to reset client password:', err);
+      return { success: false, message: 'Server communication error' };
+    }
+  };
+
+  // Admin: Trainers
+  const fetchTrainers = async () => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return [];
+    try {
+      const res = await fetch(`${API_URL}/api/admin/trainers`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTrainersList(data.trainers || []);
+        return data.trainers;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch trainers:', err);
+    }
+    return [];
+  };
+
+  const saveTrainer = async (trainer) => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return null;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/trainers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(trainer)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        await fetchTrainers();
+        return data.trainer;
+      }
+    } catch (err) {
+      console.error('Failed to save trainer:', err);
+    }
+    return null;
+  };
+
+  // Admin: Gym Settings
+  const fetchGymSettings = async () => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return null;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/settings`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setGymSettings(data.settings);
+        return data.settings;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch settings:', err);
+    }
+    return null;
+  };
+
+  const updateGymSettings = async (settings) => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return null;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(settings)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setGymSettings(data.settings);
+        return data.settings;
+      }
+    } catch (err) {
+      console.error('Failed to update settings:', err);
+    }
+    return null;
+  };
+
+  // Client: Fetch Dashboard Data
+  const fetchClientDashboard = async () => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return null;
+    try {
+      const res = await fetch(`${API_URL}/api/client/dashboard`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setClientDashboardData(data);
+        return data;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch client dashboard:', err);
+    }
+    return null;
+  };
+
+  // Client: Check-in to Gym
+  const clientCheckIn = async (signature, sessionName) => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return { success: false, message: 'Authentication required' };
+    try {
+      const res = await fetch(`${API_URL}/api/client/attendance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ signature, sessionName })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await fetchClientAttendance();
+        return { success: true, record: data.record };
+      }
+      return { success: false, message: data.message || 'Failed to check in.' };
+    } catch (err) {
+      console.error('Client check-in error:', err);
+      return { success: false, message: 'Server communication error' };
+    }
+  };
+
+  // Client: Fetch Attendance Summary
+  const fetchClientAttendance = async () => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return null;
+    try {
+      const res = await fetch(`${API_URL}/api/client/attendance`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setClientAttendanceSummary(data.summary);
+        return data;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch client attendance:', err);
+    }
+    return null;
+  };
+
+  // Client: Notifications
+  const fetchClientNotifications = async () => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return [];
+    try {
+      const res = await fetch(`${API_URL}/api/client/notifications`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setClientNotifications(data.notifications || []);
+        return data.notifications;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch notifications:', err);
+    }
+    return [];
+  };
+
+  const markNotificationRead = async (id) => {
+    const token = localStorage.getItem('gymweb_token') || sessionStorage.getItem('gymweb_token') || authToken;
+    if (!token) return;
+    try {
+      await fetch(`${API_URL}/api/client/notifications/${id}/read`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setClientNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+    } catch (err) {
+      console.warn('Failed to mark notification read:', err);
+    }
   };
 
   // Auth: Forgot Password (Request Token)
@@ -1228,9 +1703,42 @@ export const GymStateProvider = ({ children }) => {
       isAuthChecking,
       isBackendConnected,
       login,
+      loginAdmin,
+      loginClient,
       logout,
+      changePassword,
       activeTab,
       setActiveTab,
+      adminDashboardStats,
+      fetchAdminDashboardStats,
+      attendanceRecords,
+      fetchAttendanceRecords,
+      markAdminAttendance,
+      membershipPlans,
+      fetchMembershipPlans,
+      saveMembershipPlan,
+      membershipsList,
+      fetchMemberships,
+      assignMembership,
+      renewMembership,
+      paymentsList,
+      fetchPayments,
+      recordPayment,
+      trainersList,
+      fetchTrainers,
+      saveTrainer,
+      gymSettings,
+      fetchGymSettings,
+      updateGymSettings,
+      resetClientPassword,
+      clientDashboardData,
+      fetchClientDashboard,
+      clientAttendanceSummary,
+      fetchClientAttendance,
+      clientCheckIn,
+      clientNotifications,
+      fetchClientNotifications,
+      markNotificationRead,
       registerClient,
       deleteClientProfile,
       updateClientStatus,
