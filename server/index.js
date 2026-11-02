@@ -199,12 +199,6 @@ const requireOwnershipOrAdmin = (req, res, next) => {
 // -------------------------------------------------------------
 const autoSeed = async () => {
   try {
-    // In production, do not create demo seed accounts unless explicitly enabled
-    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_DEMO_SEED !== 'true') {
-      console.log('Production environment detected. Auto-seeding disabled to protect production data.');
-      return;
-    }
-
     const existingAdmin = await getAdmin('admin');
     if (!existingAdmin) {
       console.log('No admin found. Creating default admin account...');

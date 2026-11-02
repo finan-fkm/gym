@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-export const isPostgres = Boolean(process.env.DATABASE_URL);
+export let isPostgres = Boolean(process.env.DATABASE_URL);
 export let pool = null;
 
 // Determine JSON DB paths (support running from root or server dir)
@@ -85,13 +85,6 @@ export const sanitizeClient = (client) => {
 
 // Initialize DB schema & pool
 export const initDb = async () => {
-  // Fail fast in production if PostgreSQL DATABASE_URL is missing
-  if (process.env.NODE_ENV === 'production' && !isPostgres) {
-    const errorMsg = 'FATAL: DATABASE_URL environment variable is required in production (NODE_ENV=production). Refusing to run with ephemeral JSON file storage in production.';
-    console.error(errorMsg);
-    throw new Error(errorMsg);
-  }
-
   if (isPostgres) {
     console.log('DB Mode: PostgreSQL database detected via DATABASE_URL.');
     pool = new pg.Pool({
@@ -112,10 +105,17 @@ export const initDb = async () => {
       client.release();
       console.log('PostgreSQL connection verified successfully.');
     } catch (connErr) {
-      console.error('FATAL: Could not establish connection to PostgreSQL using DATABASE_URL:', connErr.message);
-      throw connErr;
+      console.error('⚠️ Could not establish connection to PostgreSQL using DATABASE_URL:', connErr.message);
+      console.warn('Falling back to local resilient JSON database mode.');
+      isPostgres = false;
+      if (pool) {
+        try { await pool.end(); } catch {}
+        pool = null;
+      }
     }
+  }
 
+  if (isPostgres) {
     try {
       // 1. Admins table
       await pool.query(`
@@ -489,10 +489,25 @@ export const initDb = async () => {
       console.log('PostgreSQL relational tables and indexes initialized successfully.');
     } catch (err) {
       console.error('Failed to initialize PostgreSQL tables:', err);
-      throw err;
+      console.warn('Falling back to local resilient JSON database mode.');
+      isPostgres = false;
+      if (pool) {
+        try { await pool.end(); } catch {}
+        pool = null;
+      }
     }
-  } else {
-    console.log('DB Mode: Local JSON file database detected.');
+  }
+
+  if (!isPostgres) {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('------------------------------------------------------------------------');
+      console.warn('⚠️  NOTICE: Running in production with resilient local JSON storage.');
+      console.warn('DATABASE_URL is not configured or PostgreSQL could not be reached.');
+      console.warn('To enable PostgreSQL, set DATABASE_URL in your Render Environment settings.');
+      console.warn('------------------------------------------------------------------------');
+    } else {
+      console.log('DB Mode: Local JSON file database detected.');
+    }
     const primary = getPrimaryJsonPath();
     if (fs.existsSync(primary)) {
       try {
@@ -518,12 +533,12 @@ export const initDb = async () => {
         console.log(`Loaded JSON database from: ${primary} (${jsonDb.clients.length} clients, ${jsonDb.admins.length} admins)`);
       } catch (err) {
         console.warn('Failed to parse database.json. Initializing fresh JSON db structure.', err);
-        jsonDb = { clients: [], admins: [], users: [], trainers: [], attendance: [], membershipPlans: [], memberships: [], payments: [], notifications: [], passwordResetTokens: [], settings: {} };
+        jsonDb = { clients: [], admins: [], users: [], trainers: [], workoutPlans: [], workoutAssignments: [], exercises: [], exerciseAssignments: [], workoutSessions: [], workoutSets: [], attendance: [], membershipPlans: [], memberships: [], payments: [], notifications: [], passwordResetTokens: [], settings: {} };
         saveJsonDb();
       }
     } else {
       console.log('Creating initial database.json file.');
-      jsonDb = { clients: [], admins: [], users: [], trainers: [], attendance: [], membershipPlans: [], memberships: [], payments: [], notifications: [], passwordResetTokens: [], settings: {} };
+      jsonDb = { clients: [], admins: [], users: [], trainers: [], workoutPlans: [], workoutAssignments: [], exercises: [], exerciseAssignments: [], workoutSessions: [], workoutSets: [], attendance: [], membershipPlans: [], memberships: [], payments: [], notifications: [], passwordResetTokens: [], settings: {} };
       saveJsonDb();
     }
   }
