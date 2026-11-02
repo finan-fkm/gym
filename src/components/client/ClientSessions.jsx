@@ -3,12 +3,13 @@ import { useGymState } from '../../context/GymStateContext';
 import { Calendar, Clock, MapPin, Send, CheckCircle2 } from 'lucide-react';
 
 export default function ClientSessions() {
-  const { activeClient, updateNextSession } = useGymState();
+  const { activeClient, updateNextSession, recordClientAttendance } = useGymState();
 
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [reason, setReason] = useState('');
   const [success, setSuccess] = useState(false);
+  const [checkingIn, setCheckingIn] = useState(false);
 
   if (!activeClient) return null;
 
@@ -127,6 +128,48 @@ export default function ClientSessions() {
             </button>
           </form>
         )}
+      </div>
+
+      {/* Attendance & Sign-in Records Card */}
+      <div className="bg-white rounded-3xl p-6 shadow-premium border border-gray-100 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="text-sm font-extrabold text-gray-800 tracking-wide flex items-center gap-1.5">
+              <span className="w-1.5 h-3.5 bg-[#00af87] rounded-sm"></span>
+              Attendance Records
+            </h4>
+            <p className="text-[11px] text-gray-400 font-semibold mt-0.5">Your gym visit and check-in history</p>
+          </div>
+          <button
+            onClick={async () => {
+              setCheckingIn(true);
+              const today = new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+              const sig = (activeClient.name || 'Member').toUpperCase().replace(/\s+/g, '_');
+              await recordClientAttendance(activeClient.id, today, sig);
+              setCheckingIn(false);
+            }}
+            disabled={checkingIn}
+            className="px-3 py-1.5 bg-[#00af87]/10 border border-[#00af87]/20 text-[#00af87] hover:bg-[#00af87]/20 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+          >
+            {checkingIn ? 'Checking in...' : '+ Check In Today'}
+          </button>
+        </div>
+
+        <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+          {(!activeClient.signinHistory || activeClient.signinHistory.length === 0) ? (
+            <p className="text-xs text-gray-400 text-center py-4 font-medium">No check-in records found yet.</p>
+          ) : (
+            activeClient.signinHistory.map((sig) => (
+              <div key={sig.id} className="flex items-center justify-between p-3 bg-gray-50/70 rounded-2xl border border-gray-100 text-xs">
+                <div className="flex items-center gap-2.5 text-gray-700 font-semibold">
+                  <CheckCircle2 size={15} className="text-[#00af87]" />
+                  <span>{sig.date}</span>
+                </div>
+                <span className="font-serif italic text-gray-500 text-xs tracking-wider">{sig.signature}</span>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

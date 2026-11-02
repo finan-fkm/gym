@@ -6,15 +6,15 @@ export default function Navbar() {
   const { currentRole, activeClient, clients, setActiveClientId, logout, activeTab, setActiveTab } = useGymState();
 
   return (
-    <nav className="sticky top-0 z-50 bg-white border-b border-gray-100 px-6 py-3 flex items-center justify-between shadow-sm">
+    <nav className="sticky top-0 z-50 bg-white border-b border-gray-100 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between shadow-sm">
       {/* Brand Logo */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
         <img
           src="/logo.jpg"
           alt="Fit By Shahid Logo"
-          className="w-9 h-9 rounded-full object-cover border border-gray-100 shadow-sm"
+          className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-gray-100 shadow-sm shrink-0"
         />
-        <span className="text-xl font-bold tracking-tight text-[#2c3e50] font-sans">
+        <span className="text-sm sm:text-xl font-bold tracking-tight text-[#2c3e50] font-sans truncate">
           FIT_BY_SHAHID<span className="text-[#00af87]">_</span>
         </span>
       </div>
@@ -56,15 +56,15 @@ export default function Navbar() {
       </div>
 
       {/* Switcher & Logged In user info */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
         {/* Client Selection (Admin Mode only) */}
         {currentRole === 'admin' && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 font-medium">Viewing Client:</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-400 font-medium hidden md:inline">Viewing:</span>
             <select
               value={activeClient?.id || ''}
               onChange={(e) => setActiveClientId(e.target.value)}
-              className="text-xs font-semibold bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-gray-700 outline-none focus:border-[#00af87] cursor-pointer animate-in fade-in"
+              className="text-xs font-semibold bg-gray-50 border border-gray-200 rounded-lg px-1.5 sm:px-2 py-1 text-gray-700 outline-none focus:border-[#00af87] cursor-pointer animate-in fade-in max-w-[95px] sm:max-w-[180px] truncate"
             >
               {clients.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -74,7 +74,7 @@ export default function Navbar() {
         )}
 
         {/* User profile details */}
-        <div className="flex items-center gap-2.5 pl-3 border-l border-gray-200">
+        <div className="flex items-center gap-2 sm:gap-2.5 pl-2 sm:pl-3 border-l border-gray-200">
           <div className="flex flex-col text-right hidden sm:block">
             <span className="text-xs font-bold text-gray-800">
               {currentRole === 'admin' ? 'Coach Brandon' : activeClient?.name}
@@ -86,14 +86,14 @@ export default function Navbar() {
           <img
             src={currentRole === 'admin' ? '/images/john.webp' : activeClient?.photo}
             alt="User profile"
-            className="w-9 h-9 rounded-full object-cover border-2 border-gray-200 shadow-sm"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border-2 border-gray-200 shadow-sm shrink-0"
           />
         </div>
 
         {/* Logout Button */}
         <button
           onClick={logout}
-          className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 hover:border-red-200 hover:bg-red-50 text-gray-500 hover:text-red-600 rounded-xl text-xs font-bold transition-all shadow-sm"
+          className="flex items-center gap-1 px-2 sm:px-3 py-1.5 border border-gray-200 hover:border-red-200 hover:bg-red-50 text-gray-500 hover:text-red-600 rounded-xl text-xs font-bold transition-all shadow-sm"
           title="Sign out of account"
         >
           <LogOut size={13} />

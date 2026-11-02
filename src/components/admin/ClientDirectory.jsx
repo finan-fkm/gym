@@ -1,11 +1,19 @@
 import React, { useState } from 'react';
 import { useGymState } from '../../context/GymStateContext';
-import { Search, UserPlus, MapPin, Scale, ChevronRight, Check, X } from 'lucide-react';
+import { Search, UserPlus, MapPin, Scale, ChevronRight, Check, X, Trash2, UserCheck, UserX } from 'lucide-react';
 
 export default function ClientDirectory() {
-  const { clients, registerClient, setActiveClientId, setActiveTab } = useGymState();
+  const { 
+    clients, 
+    registerClient, 
+    setActiveClientId, 
+    setActiveTab, 
+    updateClientStatus, 
+    deleteClientProfile 
+  } = useGymState();
   
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'active', 'inactive'
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
 
   // Registration Form States
@@ -26,11 +34,19 @@ export default function ClientDirectory() {
   const [status, setStatus] = useState('Active');
 
   // Filtering
-  const filteredClients = clients.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.location.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const activeCount = clients.filter(c => (c.status || 'Active') === 'Active').length;
+  const inactiveCount = clients.filter(c => c.status === 'Inactive').length;
+
+  const filteredClients = clients.filter(c => {
+    const matchesSearch = 
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (c.location && c.location.toLowerCase().includes(searchQuery.toLowerCase()));
+    if (!matchesSearch) return false;
+    if (statusFilter === 'active') return (c.status || 'Active') === 'Active';
+    if (statusFilter === 'inactive') return c.status === 'Inactive';
+    return true;
+  });
 
   const handleRegisterSubmit = (e) => {
     e.preventDefault();
@@ -106,16 +122,55 @@ export default function ClientDirectory() {
         </button>
       </div>
 
-      {/* Search Filter Bar */}
-      <div className="relative">
-        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Search by client name, username, or location..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-white border border-gray-100 rounded-2xl pl-12 pr-4 py-3.5 text-xs outline-none focus:border-[#00af87] text-gray-700 shadow-sm font-semibold transition-all"
-        />
+      {/* Search & Status Filter Controls */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by client name, username, or location..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-white border border-gray-100 rounded-2xl pl-12 pr-4 py-3 text-xs outline-none focus:border-[#00af87] text-gray-700 shadow-sm font-semibold transition-all"
+          />
+        </div>
+
+        {/* Filter Pills */}
+        <div className="flex items-center gap-1.5 bg-white p-1 rounded-2xl border border-gray-100 shadow-sm self-start sm:self-auto shrink-0">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+              statusFilter === 'all'
+                ? 'bg-[#00af87] text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            All ({clients.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('active')}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+              statusFilter === 'active'
+                ? 'bg-[#00af87] text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            Active ({activeCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('inactive')}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+              statusFilter === 'inactive'
+                ? 'bg-red-500 text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+            }`}
+          >
+            Inactive ({inactiveCount})
+          </button>
+        </div>
       </div>
 
       {/* Grid of Client Summary Cards */}
@@ -222,10 +277,39 @@ export default function ClientDirectory() {
                       setActiveClientId(client.id);
                       setActiveTab('home');
                     }}
-                    className="flex-1 py-2.5 rounded-xl border border-gray-100 text-xs font-bold text-gray-600 hover:border-[#00af87] hover:text-[#00af87] hover:bg-teal-50/10 transition-all flex items-center justify-center gap-1 shadow-sm"
+                    className="flex-1 py-2 rounded-xl border border-gray-100 text-xs font-bold text-gray-700 hover:border-[#00af87] hover:text-[#00af87] hover:bg-teal-50/10 transition-all flex items-center justify-center gap-1 shadow-sm"
                   >
                     View Profile
                     <ChevronRight size={14} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newStatus = client.status === 'Inactive' ? 'Active' : 'Inactive';
+                      updateClientStatus(client.id, newStatus);
+                    }}
+                    title={client.status === 'Inactive' ? 'Activate Client' : 'Deactivate Client'}
+                    className={`p-2 rounded-xl border text-xs font-bold transition-all flex items-center justify-center shadow-sm ${
+                      client.status === 'Inactive'
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                        : 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                    }`}
+                  >
+                    {client.status === 'Inactive' ? <UserCheck size={14} /> : <UserX size={14} />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`Are you sure you want to delete ${client.name}'s profile? This action cannot be undone.`)) {
+                        deleteClientProfile(client.id);
+                      }
+                    }}
+                    title="Delete Profile"
+                    className="p-2 rounded-xl border border-red-100 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-700 transition-all flex items-center justify-center shadow-sm"
+                  >
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>
@@ -262,7 +346,7 @@ export default function ClientDirectory() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide block mb-1.5">Client Username</label>
                   <input
@@ -286,7 +370,7 @@ export default function ClientDirectory() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide block mb-1.5">Member ID</label>
                   <input
@@ -311,7 +395,7 @@ export default function ClientDirectory() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide block mb-1.5">Phone Number</label>
                   <input
@@ -334,7 +418,7 @@ export default function ClientDirectory() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide block mb-1.5">Plan</label>
                   <select
@@ -368,7 +452,7 @@ export default function ClientDirectory() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide block mb-1.5">Starting Weight (lbs)</label>
                   <input

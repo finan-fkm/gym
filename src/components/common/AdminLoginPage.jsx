@@ -11,27 +11,8 @@ export default function AdminLoginPage({ onNavigate }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Set to true to enable Admin/Staff Registration link
+  // Admin registration is strictly disabled in production
   const isAdminRegistrationEnabled = false;
-
-  const handleQuickLogin = async (user, pass) => {
-    setUsername(user);
-    setPassword(pass);
-    setError('');
-    setLoading(true);
-    try {
-      const res = await login('admin', user, pass);
-      setLoading(false);
-      if (res.success) {
-        onNavigate('/admin/dashboard');
-      } else {
-        setError(res.message);
-      }
-    } catch {
-      setLoading(false);
-      setError('An unexpected error occurred. Please try again.');
-    }
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -39,7 +20,7 @@ export default function AdminLoginPage({ onNavigate }) {
     setLoading(true);
 
     try {
-      const res = await login('admin', username, password);
+      const res = await login('admin', username, password, rememberMe);
       setLoading(false);
       if (res.success) {
         onNavigate('/admin/dashboard');
@@ -82,22 +63,6 @@ export default function AdminLoginPage({ onNavigate }) {
             </div>
             <h2 className="text-xl font-black text-white uppercase tracking-wider">ADMIN LOGIN</h2>
             <p className="text-[11px] text-gray-400 font-medium">Manage your gym with complete control</p>
-          </div>
-
-          {/* Quick Demo Helper for Mobile & Testing */}
-          <div className="bg-[#1a2027] border border-gray-800/90 rounded-2xl p-3 flex items-center justify-between gap-3 text-xs">
-            <div className="text-left">
-              <span className="text-[10px] font-extrabold text-[#00af87] uppercase tracking-wider block">Default Credentials</span>
-              <span className="font-mono text-gray-300 text-[11px]">admin</span> / <span className="font-mono text-gray-300 text-[11px]">password</span>
-            </div>
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => handleQuickLogin('admin', 'password')}
-              className="px-3 py-1.5 rounded-xl bg-[#00af87]/20 border border-[#00af87]/40 text-[#00af87] hover:bg-[#00af87]/30 text-[11px] font-extrabold transition-all shrink-0 active:scale-95 disabled:opacity-50"
-            >
-              1-Tap Login
-            </button>
           </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
@@ -169,7 +134,7 @@ export default function AdminLoginPage({ onNavigate }) {
               </label>
               <button
                 type="button"
-                onClick={() => setError('Please contact the head administrator to reset your password.')}
+                onClick={() => setError('Please contact the head administrator or use the server CLI to reset administrator credentials.')}
                 className="text-[#00af87] hover:underline font-semibold"
               >
                 Forgot Password?
@@ -198,19 +163,19 @@ export default function AdminLoginPage({ onNavigate }) {
                 onClick={() => onNavigate('/register/admin')}
                 className="text-xs text-[#00af87] hover:underline font-bold"
               >
-                Create Admin Account
+                Register as Admin / Staff →
               </button>
             </div>
           )}
         </div>
 
-        {/* Client portal redirect link: Kept separate and outside the login form card */}
+        {/* Link back to Member Portal */}
         <div className="mt-6 text-center">
           <button
             onClick={() => onNavigate('/login/client')}
-            className="text-[11px] text-gray-500 hover:text-[#00af87] font-bold uppercase tracking-wider transition-all"
+            className="text-[10px] text-gray-500 hover:text-gray-300 font-bold uppercase tracking-wider transition-all"
           >
-            ← Go to Member Portal
+            ← Member Portal
           </button>
         </div>
       </div>

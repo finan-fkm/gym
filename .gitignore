@@ -23,5 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 
-# Local databases
+# Local databases & backups
 database.json
+database.backup.*.json
+
+# Local tool wrappers
+bin/

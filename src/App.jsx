@@ -33,36 +33,49 @@ function useRouter() {
 }
 
 function DashboardContainer() {
-  const { currentRole, activeClient, currentUser, activeTab, logout } = useGymState();
+  const { currentRole, activeClient, currentUser, activeTab, isAuthChecking, logout } = useGymState();
   const [clientTab, setClientTab] = useState('workout'); // 'workout', 'progress', 'sessions'
   const { path, navigate } = useRouter();
 
   useEffect(() => {
+    if (isAuthChecking) return;
+
     if (currentUser) {
       if (currentRole === 'admin') {
-        if (path !== '/admin/dashboard') {
+        if (path !== '/admin/dashboard' && !path.startsWith('/admin')) {
           navigate('/admin/dashboard');
         }
       } else if (currentRole === 'client') {
         if (path.startsWith('/admin')) {
-          // Redirect client accessing admin url directly to /login/client after logging them out
           logout();
           navigate('/login/client');
-        } else if (path !== '/client/dashboard') {
+        } else if (path !== '/client/dashboard' && !path.startsWith('/client')) {
           navigate('/client/dashboard');
         }
       }
     } else {
       // Guest redirects
       if (path !== '/login/admin' && path !== '/login/client' && path !== '/register/client') {
-        if (path.startsWith('/admin') || path === '/login/admin') {
+        if (path.startsWith('/admin')) {
           navigate('/login/admin');
         } else {
           navigate('/login/client');
         }
       }
     }
-  }, [currentUser, currentRole, path, navigate, logout]);
+  }, [currentUser, currentRole, path, navigate, logout, isAuthChecking]);
+
+  // Loading state during token validation
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-[#0d0f12] flex items-center justify-center p-6">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-3 border-[#00af87]/20 border-t-[#00af87] rounded-full animate-spin"></div>
+          <p className="text-xs font-semibold text-gray-400">Connecting to Gym Portal...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Handle unauthenticated routes
   if (!currentUser) {
@@ -72,7 +85,6 @@ function DashboardContainer() {
     if (path === '/register/client') {
       return <ClientRegisterPage onNavigate={navigate} />;
     }
-    // Default fallback to client login
     return <ClientLoginPage onNavigate={navigate} />;
   }
 

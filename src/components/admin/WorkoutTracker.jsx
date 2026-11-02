@@ -1,7 +1,27 @@
 import React, { useState } from 'react';
 import { useGymState } from '../../context/GymStateContext';
-import { Calendar, CheckCircle2, Circle, Clock, Plus, Trash2, Edit2, Link2, Check, X, Dumbbell, TrendingUp, Scale, Ruler, Award } from 'lucide-react';
+import { 
+  Calendar, 
+  CheckCircle2, 
+  Circle, 
+  Clock, 
+  Plus, 
+  Trash2, 
+  Edit2, 
+  Link2, 
+  Check, 
+  X, 
+  Dumbbell, 
+  TrendingUp, 
+  Scale, 
+  Ruler, 
+  Award,
+  History,
+  Flame
+} from 'lucide-react';
 import WorkoutEditorModal from './WorkoutEditorModal';
+import WorkoutHistoryComparison from '../common/WorkoutHistoryComparison';
+import { normalizeExercise } from '../../utils/workoutUtils';
 
 export default function WorkoutTracker() {
   const {
@@ -10,7 +30,7 @@ export default function WorkoutTracker() {
     deleteExercise,
     updateNextSession,
     updateWeeklyProgressFocus,
-    updateExercise
+    updateWorkoutMeta
   } = useGymState();
 
   const [selectedDayId, setSelectedDayId] = useState('thu'); // default Thursday as per design
@@ -25,6 +45,9 @@ export default function WorkoutTracker() {
   const [editingExercise, setEditingExercise] = useState(null);
   
   const [activePanel, setActivePanel] = useState('workout'); // 'workout' or 'analytics'
+  const [isEditingWorkoutMeta, setIsEditingWorkoutMeta] = useState(false);
+  const [workoutNameInput, setWorkoutNameInput] = useState('');
+  const [workoutDurationInput, setWorkoutDurationInput] = useState('');
 
   if (!activeClient) return null;
 
@@ -213,21 +236,27 @@ export default function WorkoutTracker() {
     );
   };
 
-  const currentWorkout = activeClient.dailyWorkouts[selectedDayId] || {
+  const currentWorkout = (activeClient.dailyWorkouts && activeClient.dailyWorkouts[selectedDayId]) || {
     name: "Recovery or Rest Day",
     duration: "No workouts scheduled",
     exercises: []
   };
 
-  // Day mapping for indexing
-  const dayIdToKey = {
-    mon: 'mon',
-    tue: 'tue',
-    wed: 'wed',
-    thu: 'thu',
-    fri: 'fri',
-    sat: 'sat',
-    sun: 'sun'
+  // Workout Title / Duration Handlers
+  const handleStartEditWorkoutMeta = () => {
+    setWorkoutNameInput(currentWorkout.name || '');
+    setWorkoutDurationInput(currentWorkout.duration || '');
+    setIsEditingWorkoutMeta(true);
+  };
+
+  const handleSaveWorkoutMeta = () => {
+    updateWorkoutMeta(
+      activeClient.id, 
+      selectedDayId, 
+      workoutNameInput.trim() || 'Custom Workout', 
+      workoutDurationInput.trim() || '30 minutes'
+    );
+    setIsEditingWorkoutMeta(false);
   };
 
   // Reschedule Session Handler
@@ -256,31 +285,6 @@ export default function WorkoutTracker() {
   const handleEditExerciseClick = (ex) => {
     setEditingExercise(ex);
     setEditorOpen(true);
-  };
-
-  // Superset Action Helper
-  const handleToggleSuperset = (exId) => {
-    const exercises = currentWorkout.exercises;
-    const idx = exercises.findIndex(e => e.id === exId);
-    if (idx === -1 || idx === exercises.length - 1) return;
-
-    const currentEx = exercises[idx];
-    const nextEx = exercises[idx + 1];
-
-    if (currentEx.supersetId && nextEx.supersetId && currentEx.supersetId === nextEx.supersetId) {
-      // Unlink them
-      exercises[idx].supersetId = null;
-      exercises[idx + 1].supersetId = null;
-      updateExercise(activeClient.id, selectedDayId, currentEx.id, { supersetId: null });
-      updateExercise(activeClient.id, selectedDayId, nextEx.id, { supersetId: null });
-    } else {
-      // Link them
-      const newSsId = 'ss_' + Date.now();
-      exercises[idx].supersetId = newSsId;
-      exercises[idx + 1].supersetId = newSsId;
-      updateExercise(activeClient.id, selectedDayId, currentEx.id, { supersetId: newSsId });
-      updateExercise(activeClient.id, selectedDayId, nextEx.id, { supersetId: newSsId });
-    }
   };
 
   // Grouping exercises by superset consecutive blocks
@@ -352,75 +356,165 @@ export default function WorkoutTracker() {
     return items;
   };
 
-  const renderExerciseRow = (ex, inSuperset = false, isFirst = false, isLast = false) => {
-    return (
-      <div className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-4 ${
-        ex.completed ? 'bg-amber-50/10' : 'bg-transparent'
-      }`}>
-        <div className="flex items-center gap-4 flex-1">
-          {/* Exercise Demo Image */}
-          <img
-            src={ex.image}
-            alt={ex.name}
-            className="w-16 h-16 rounded-xl object-cover border border-gray-100 shadow-sm"
-          />
+  const renderExerciseRow = (rawEx, inSuperset = false, isFirst = false, _isLast = false) => {
+    const ex = normalizeExercise(rawEx);
+    const sets = ex.setRecords || [];
+    const completedSetsCount = sets.filter(s => s.status === 'completed').length;
+    const isCompleted = ex.status === 'completed' || ex.completed;
+    const isSkipped = ex.status === 'skipped';
 
-          {/* Exercise Info */}
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <h5 className="font-extrabold text-sm text-gray-800 tracking-wide">{ex.name}</h5>
-              {inSuperset && isFirst && (
-                <span className="text-[9px] font-extrabold bg-teal-50 text-[#00af87] border border-teal-100 px-2 py-0.5 rounded-full tracking-wider uppercase">
-                  Superset
-                </span>
+    return (
+      <div className={`p-4 transition-all rounded-2xl ${
+        isCompleted ? 'bg-teal-50/10' : isSkipped ? 'bg-gray-50/40 opacity-80' : 'bg-transparent'
+      }`}>
+        {/* Top Header of Exercise */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3.5 flex-1">
+            {/* Exercise Demo Image */}
+            <img
+              src={ex.image || '/images/exercise_squat.webp'}
+              alt={ex.name}
+              className="w-14 h-14 rounded-2xl object-cover border border-gray-100 shadow-sm shrink-0"
+            />
+
+            {/* Exercise Info */}
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <h5 className={`font-extrabold text-sm ${isCompleted ? 'text-[#00af87]' : 'text-gray-800'}`}>
+                  {ex.name}
+                </h5>
+                {inSuperset && isFirst && (
+                  <span className="text-[9px] font-extrabold bg-teal-50 text-[#00af87] border border-teal-100 px-2 py-0.5 rounded-full tracking-wider uppercase">
+                    Superset
+                  </span>
+                )}
+                {/* Real-time status badge */}
+                {isCompleted ? (
+                  <span className="text-[9px] font-extrabold bg-teal-50 text-[#00af87] border border-teal-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    Completed
+                  </span>
+                ) : isSkipped ? (
+                  <span className="text-[9px] font-extrabold bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full uppercase tracking-wider" title={ex.skipReason}>
+                    Skipped
+                  </span>
+                ) : ex.status === 'in_progress' ? (
+                  <span className="text-[9px] font-extrabold bg-orange-50 text-[#ff9f29] border border-orange-100 px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-0.5">
+                    <Flame size={10} /> Live: {completedSetsCount}/{sets.length} Done
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-extrabold bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    Pending
+                  </span>
+                )}
+              </div>
+
+              {/* Coach targets banner */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[11px] font-semibold text-gray-400">
+                <span>Target: <b className="text-gray-700">{ex.sets} Sets</b> × <b className="text-gray-700">{ex.targetReps} Reps</b></span>
+                <span>•</span>
+                <span>Suggested: <b className="text-gray-700">{ex.isBodyweight ? 'Bodyweight' : `${ex.suggestedWeight || 10} kg`}</b></span>
+                {ex.equipment && (
+                  <>
+                    <span>•</span>
+                    <span className="text-gray-400">{ex.equipment}</span>
+                  </>
+                )}
+              </div>
+
+              {ex.details && (
+                <p className="text-[10px] text-gray-400 font-medium mt-1 leading-normal">
+                  Instructions: <span className="text-gray-600 font-semibold">{ex.details}</span>
+                </p>
               )}
             </div>
+          </div>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-[11px] font-semibold text-gray-400">
-              <span>Sets: <b className="text-gray-700">{ex.sets}</b></span>
-              {ex.equipment && <span>Equipment: <b className="text-gray-500">{ex.equipment}</b></span>}
-              {ex.reps && <span>Reps/Dur: <b className="text-gray-500">{ex.reps}</b></span>}
-              {ex.weight && <span>Weight: <b className="text-gray-500">{ex.weight}</b></span>}
+          {/* Action controls & completion */}
+          <div className="flex items-center justify-between sm:justify-end gap-3.5 border-t sm:border-t-0 pt-2 sm:pt-0">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleEditExerciseClick(ex)}
+                className="text-gray-400 hover:text-[#00af87] p-1.5 hover:bg-gray-50 rounded-lg transition-colors"
+                title="Edit targets (sets, reps, weight)"
+              >
+                <Edit2 size={13} />
+              </button>
+              <button
+                onClick={() => deleteExercise(activeClient.id, selectedDayId, ex.id)}
+                className="text-gray-400 hover:text-red-500 p-1.5 hover:bg-gray-50 rounded-lg transition-colors"
+                title="Delete exercise"
+              >
+                <Trash2 size={13} />
+              </button>
             </div>
 
-            {ex.details && (
-              <p className="text-[10px] text-gray-400 font-medium mt-1 leading-normal">
-                Details: <span className="text-[#00af87] font-semibold">{ex.details}</span>
-              </p>
-            )}
+            <button
+              onClick={() => toggleExerciseCompletion(activeClient.id, selectedDayId, ex.id)}
+              className="flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:opacity-85 transition-opacity"
+              title={isCompleted ? "Mark incomplete" : "Mark completed"}
+            >
+              {isCompleted ? (
+                <CheckCircle2 size={18} className="text-[#00af87] fill-teal-50" />
+              ) : (
+                <Circle size={18} className="text-gray-300" />
+              )}
+              <span className="sr-only">Complete</span>
+            </button>
           </div>
         </div>
 
-        {/* Action controls & completion */}
-        <div className="flex items-center justify-between sm:justify-end gap-3.5 border-t sm:border-t-0 pt-2 sm:pt-0">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleEditExerciseClick(ex)}
-              className="text-gray-400 hover:text-[#00af87] p-1.5 hover:bg-gray-50 rounded-lg transition-colors"
-              title="Edit exercise"
-            >
-              <Edit2 size={13} />
-            </button>
-            <button
-              onClick={() => deleteExercise(activeClient.id, selectedDayId, ex.id)}
-              className="text-gray-400 hover:text-red-500 p-1.5 hover:bg-gray-50 rounded-lg transition-colors"
-              title="Delete exercise"
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
-
-          <button
-            onClick={() => toggleExerciseCompletion(activeClient.id, selectedDayId, ex.id)}
-            className="flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:opacity-85 transition-opacity"
-          >
-            {ex.completed ? (
-              <CheckCircle2 size={18} className="text-[#00af87] fill-teal-50" />
-            ) : (
-              <Circle size={18} className="text-gray-300" />
-            )}
-            <span className="sr-only">Complete</span>
-          </button>
+        {/* Individual Sets Tracking Table (Coach view: Original Targets vs Client Performance) */}
+        <div className="mt-3.5 bg-gray-50/70 border border-gray-100 rounded-2xl overflow-hidden">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="bg-gray-100/60 border-b border-gray-100 text-[9px] font-extrabold text-gray-400 uppercase tracking-wider">
+                <th className="py-2 px-3">Set</th>
+                <th className="py-2 px-3 text-center">Target Reps</th>
+                <th className="py-2 px-3 text-center">Suggested Wt</th>
+                <th className="py-2 px-3 text-center">Client Actual</th>
+                <th className="py-2 px-3 text-center">Weight Used</th>
+                <th className="py-2 px-3 text-right">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100/70 font-medium">
+              {sets.map((s) => (
+                <tr key={s.setNumber} className="hover:bg-gray-100/40">
+                  <td className="py-2 px-3 font-extrabold text-gray-700">Set {s.setNumber}</td>
+                  <td className="py-2 px-3 text-center text-gray-500 font-semibold">{s.targetReps || ex.targetReps} reps</td>
+                  <td className="py-2 px-3 text-center text-gray-500 font-semibold">
+                    {ex.isBodyweight ? 'Bodyweight' : `${ex.suggestedWeight || 10} kg`}
+                  </td>
+                  <td className="py-2 px-3 text-center font-extrabold">
+                    {s.actualReps !== null ? (
+                      <span className="text-gray-800">{s.actualReps} reps</span>
+                    ) : (
+                      <span className="text-gray-300">-</span>
+                    )}
+                  </td>
+                  <td className="py-2 px-3 text-center font-extrabold">
+                    {s.weight !== null ? (
+                      <span className="text-[#ff9f29]">{s.weight} kg</span>
+                    ) : ex.isBodyweight && s.status === 'completed' ? (
+                      <span className="text-gray-500">Bodyweight</span>
+                    ) : (
+                      <span className="text-gray-300">-</span>
+                    )}
+                  </td>
+                  <td className="py-2 px-3 text-right">
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider ${
+                      s.status === 'completed'
+                        ? 'bg-teal-50 text-[#00af87] border border-teal-100'
+                        : s.status === 'skipped'
+                          ? 'bg-gray-100 text-gray-500'
+                          : 'bg-amber-50 text-amber-600 border border-amber-100'
+                    }`}>
+                      {s.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     );
@@ -482,7 +576,7 @@ export default function WorkoutTracker() {
       </div>
 
       {/* Middle Column View Panel Toggle */}
-      <div className="grid grid-cols-2 bg-gray-100 p-1.5 rounded-2xl border border-gray-200 text-center shadow-sm">
+      <div className="grid grid-cols-3 bg-gray-100 p-1.5 rounded-2xl border border-gray-200 text-center shadow-sm">
         <button
           onClick={() => setActivePanel('workout')}
           className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
@@ -495,6 +589,17 @@ export default function WorkoutTracker() {
           Workout Builder
         </button>
         <button
+          onClick={() => setActivePanel('history')}
+          className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            activePanel === 'history'
+              ? 'bg-white text-gray-800 shadow-sm border border-gray-100'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <History size={13} className="text-[#ff9f29]" />
+          History & Progress
+        </button>
+        <button
           onClick={() => setActivePanel('analytics')}
           className={`py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
             activePanel === 'analytics'
@@ -502,47 +607,54 @@ export default function WorkoutTracker() {
               : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          <TrendingUp size={13} className="text-[#ff9f29]" />
-          Progress & Analytics
+          <TrendingUp size={13} className="text-[#00af87]" />
+          Body Analytics
         </button>
       </div>
 
       {activePanel === 'analytics' ? (
         /* Render client progress charts and rates dashboard */
         renderAnalyticsPanel()
+      ) : activePanel === 'history' ? (
+        /* Render workout session history & performance comparisons */
+        <WorkoutHistoryComparison
+          sessions={activeClient.workoutSessions || []}
+          clientName={activeClient.name}
+          role="admin"
+        />
       ) : (
         /* Render workout calendar and daily exercises list */
         <>
           {/* Weekly Progress Calendar */}
-          <div className="bg-white rounded-3xl p-6 shadow-premium border border-gray-100">
-        <div className="flex justify-between items-center mb-6">
-          <h4 className="text-sm font-extrabold text-gray-800 tracking-wide flex items-center gap-1.5">
+          <div className="bg-white rounded-3xl p-3 sm:p-6 shadow-premium border border-gray-100">
+        <div className="flex justify-between items-center mb-4 sm:mb-6">
+          <h4 className="text-xs sm:text-sm font-extrabold text-gray-800 tracking-wide flex items-center gap-1.5">
             <span className="w-1.5 h-3.5 bg-[#00af87] rounded-sm"></span>
             Weekly Progress
           </h4>
-          <span className="text-[10px] font-extrabold text-gray-400 tracking-wider cursor-pointer hover:text-[#00af87] uppercase">Set Next Week</span>
+          <span className="text-[9px] sm:text-[10px] font-extrabold text-gray-400 tracking-wider cursor-pointer hover:text-[#00af87] uppercase">Set Next Week</span>
         </div>
 
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-7 gap-1 sm:gap-2">
           {activeClient.weeklyProgress.map((day) => {
             const isSelected = selectedDayId === day.id;
             return (
               <div
                 key={day.id}
                 onClick={() => setSelectedDayId(day.id)}
-                className={`flex flex-col items-center py-3 rounded-2xl cursor-pointer transition-all border ${
+                className={`flex flex-col items-center py-2 sm:py-3 rounded-xl sm:rounded-2xl cursor-pointer transition-all border ${
                   isSelected
                     ? 'border-[#ff9f29]/30 bg-orange-50/10 shadow-sm'
                     : 'border-transparent hover:bg-gray-50'
                 }`}
               >
                 {/* Selected Top Indicator Line */}
-                <div className={`w-6 h-1 rounded-full mb-2 ${
+                <div className={`w-4 sm:w-6 h-1 rounded-full mb-1.5 sm:mb-2 ${
                   isSelected ? 'bg-[#ff9f29]' : 'bg-transparent'
                 }`}></div>
 
                 {/* Day Name */}
-                <span className="text-[10px] text-gray-400 font-bold uppercase mb-2 block sm:hidden">
+                <span className="text-[9px] sm:text-[10px] text-gray-400 font-bold uppercase mb-1 sm:mb-2 block sm:hidden">
                   {day.dayName.substring(0, 1)}
                 </span>
                 <span className="text-[10px] text-gray-400 font-bold uppercase mb-2 hidden sm:block">
@@ -550,7 +662,7 @@ export default function WorkoutTracker() {
                 </span>
 
                 {/* Status Indicator bubble */}
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm transition-all ${
+                <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-bold text-[10px] sm:text-xs shadow-sm transition-all ${
                   day.completed
                     ? 'bg-[#00af87] text-white'
                     : isSelected
@@ -558,7 +670,7 @@ export default function WorkoutTracker() {
                       : 'bg-gray-100 text-gray-500'
                 }`}>
                   {day.completed ? (
-                    <CheckCircle2 size={15} className="text-white" />
+                    <CheckCircle2 size={13} className="text-white" />
                   ) : (
                     day.dateNum
                   )}
@@ -599,16 +711,58 @@ export default function WorkoutTracker() {
       {/* Daily Workout Details & Editor */}
       <div className="bg-white rounded-3xl p-6 shadow-premium border border-gray-100">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-50 pb-5 mb-5">
-          <div>
+          <div className="flex-1">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-3.5 bg-[#00af87] rounded-sm"></span>
               <h3 className="text-base font-extrabold text-gray-800">
                 {activeClient.weeklyProgress.find(d => d.id === selectedDayId)?.dayName || 'Day\'s'} Workout
               </h3>
             </div>
-            <p className="text-xs text-gray-400 font-semibold mt-1">
-              {currentWorkout.name} {currentWorkout.duration ? `— ${currentWorkout.duration}` : ''}
-            </p>
+            {isEditingWorkoutMeta ? (
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <input
+                  type="text"
+                  placeholder="Workout Name (e.g. Lower Body Burn)"
+                  value={workoutNameInput}
+                  onChange={(e) => setWorkoutNameInput(e.target.value)}
+                  className="text-xs bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1 text-gray-800 font-semibold outline-none focus:border-[#00af87]"
+                />
+                <input
+                  type="text"
+                  placeholder="Duration (e.g. 45 minutes)"
+                  value={workoutDurationInput}
+                  onChange={(e) => setWorkoutDurationInput(e.target.value)}
+                  className="text-xs bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1 text-gray-800 font-semibold outline-none focus:border-[#00af87] w-28"
+                />
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleSaveWorkoutMeta}
+                    className="bg-[#00af87] text-white px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm hover:opacity-95"
+                  >
+                    <Check size={12} /> Save
+                  </button>
+                  <button
+                    onClick={() => setIsEditingWorkoutMeta(false)}
+                    className="bg-gray-100 text-gray-600 px-2 py-1 rounded-lg text-xs font-bold hover:bg-gray-200"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-xs text-gray-400 font-semibold">
+                  {currentWorkout.name} {currentWorkout.duration ? `— ${currentWorkout.duration}` : ''}
+                </p>
+                <button
+                  onClick={handleStartEditWorkoutMeta}
+                  className="text-gray-400 hover:text-[#00af87] p-1 rounded hover:bg-gray-50 transition-colors"
+                  title="Edit workout details"
+                >
+                  <Edit2 size={12} />
+                </button>
+              </div>
+            )}
           </div>
 
           <button

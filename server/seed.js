@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { initDb, saveClient, saveAdmin, getClients, getAdmin } from './db.js';
+import { initDb, saveClient, saveAdmin, getClients, getAdmin, closeDb } from './db.js';
 import { initialClients } from './seedData.js';
 
 const seed = async () => {
@@ -45,6 +45,7 @@ const seed = async () => {
     }
 
     console.log('Database seeding process completed successfully!');
+    await closeDb();
     process.exit(0);
   } catch (err) {
     console.error('Error during database seeding:', err);

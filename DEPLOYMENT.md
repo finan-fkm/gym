@@ -60,14 +60,19 @@ If you prefer setting up each service manually through the Render Dashboard, fol
    - **Region**: (Must match the Database Region)
    - **Root Directory**: `server`
    - **Build Command**: `npm install`
-   - **Start Command**: `npm run seed && npm start`
+   - **Start Command**: `npm start`
    - **Plan**: `Free`
 4. Expand the **Advanced** section and add these **Environment Variables**:
    - `PORT`: `5000`
    - `NODE_ENV`: `production`
    - `DATABASE_URL`: (Paste the **Internal Database URL** copied in Step 1)
+   - `JWT_SECRET`: (Generate a secure random string, minimum 32 characters)
+   - `CLIENT_URL`: `https://gym-seven-rose.vercel.app`
+   - `FRONTEND_URL`: `https://gym-seven-rose.vercel.app`
+   - `ENABLE_DEMO_SEED`: `false` (set to `false` in production to protect existing member data)
 5. Click **Create Web Service**.
 6. Once deployed, copy your backend's public service URL (e.g., `https://gym-backend.onrender.com`).
+   - *Note: To safely migrate your existing JSON data to PostgreSQL, run `npm run migrate` with `DATABASE_URL` configured.*
 
 ---
 

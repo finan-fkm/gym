@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useGymState } from '../../context/GymStateContext';
 import { User, Lock, AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import ForgotPasswordModal from './ForgotPasswordModal';
 
 export default function ClientLoginPage({ onNavigate }) {
   const { login } = useGymState();
@@ -8,6 +9,7 @@ export default function ClientLoginPage({ onNavigate }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -17,7 +19,7 @@ export default function ClientLoginPage({ onNavigate }) {
     setLoading(true);
 
     try {
-      const res = await login('client', username, password);
+      const res = await login('client', username, password, rememberMe);
       setLoading(false);
       if (res.success) {
         onNavigate('/client/dashboard');
@@ -27,23 +29,6 @@ export default function ClientLoginPage({ onNavigate }) {
     } catch {
       setLoading(false);
       setError('An unexpected error occurred. Please try again.');
-    }
-  };
-
-  const handleQuickLogin = async (user, pass) => {
-    setError('');
-    setLoading(true);
-    try {
-      const res = await login('client', user, pass);
-      setLoading(false);
-      if (res.success) {
-        onNavigate('/client/dashboard');
-      } else {
-        setError(res.message);
-      }
-    } catch {
-      setLoading(false);
-      setError('An unexpected error occurred.');
     }
   };
 
@@ -148,7 +133,7 @@ export default function ClientLoginPage({ onNavigate }) {
               </label>
               <button
                 type="button"
-                onClick={() => setError('Please contact the gym administrator to reset your password.')}
+                onClick={() => setShowForgotModal(true)}
                 className="text-[#ff9f29] hover:underline font-semibold"
               >
                 Forgot Password?
@@ -183,29 +168,6 @@ export default function ClientLoginPage({ onNavigate }) {
               Register & Set Password
             </button>
           </div>
-
-          {/* Quick Demo Login */}
-          <div className="border-t border-gray-100 pt-4">
-            <span className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider block text-center mb-2.5">
-              Quick Demo Accounts
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('therese', 'password')}
-                className="px-3 py-2 border border-gray-100 hover:border-[#ff9f29] hover:bg-orange-50/10 rounded-xl text-center transition-all text-[11px] font-bold text-gray-600"
-              >
-                Therese Spring
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('john', 'password')}
-                className="px-3 py-2 border border-gray-100 hover:border-[#ff9f29] hover:bg-orange-50/10 rounded-xl text-center transition-all text-[11px] font-bold text-gray-600"
-              >
-                John Doe
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Link to Admin Login is separate and small, outside the card */}
@@ -218,6 +180,13 @@ export default function ClientLoginPage({ onNavigate }) {
           </button>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal 
+        isOpen={showForgotModal} 
+        onClose={() => setShowForgotModal(false)} 
+        onNavigate={onNavigate}
+      />
     </div>
   );
 }

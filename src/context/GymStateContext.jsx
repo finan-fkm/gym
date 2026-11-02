@@ -1,12 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { initialClients } from '../mockData';
-
-const hashPassword = async (password) => {
-  const msgUint8 = new TextEncoder().encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-};
+import { 
+  normalizeExercise, 
+  normalizeClientWorkouts, 
+  compareSessions 
+} from '../utils/workoutUtils';
 
 const GymStateContext = createContext();
 
@@ -26,16 +24,32 @@ export const GymStateProvider = ({ children }) => {
   const API_URL = rawApiUrl.startsWith('http://') || rawApiUrl.startsWith('https://')
     ? rawApiUrl
     : `https://${rawApiUrl}`;
-  const [isBackendConnected, setIsBackendConnected] = useState(false);
 
-  const [clients, setClients] = useState(() => {
-    const saved = localStorage.getItem('gymweb_clients');
-    return saved ? JSON.parse(saved) : initialClients;
+  const [isBackendConnected, setIsBackendConnected] = useState(false);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+
+  const [authToken, setAuthToken] = useState(() => {
+    return sessionStorage.getItem('gymweb_token') || localStorage.getItem('gymweb_token') || '';
   });
 
   const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem('gymweb_user');
+    const saved = sessionStorage.getItem('gymweb_user') || localStorage.getItem('gymweb_user');
     return saved ? JSON.parse(saved) : null;
+  });
+
+  const [currentRole, setCurrentRole] = useState(() => {
+    const savedUser = sessionStorage.getItem('gymweb_user') || localStorage.getItem('gymweb_user');
+    if (savedUser) {
+      const u = JSON.parse(savedUser);
+      return u.role;
+    }
+    return 'admin';
+  });
+
+  const [clients, setClients] = useState(() => {
+    const saved = localStorage.getItem('gymweb_clients');
+    const base = saved ? JSON.parse(saved) : initialClients;
+    return Array.isArray(base) ? base.map(normalizeClientWorkouts) : [];
   });
 
   const [activeClientId, setActiveClientId] = useState(() => {
@@ -44,51 +58,118 @@ export const GymStateProvider = ({ children }) => {
       const u = JSON.parse(savedUser);
       if (u.role === 'client') return u.clientId;
     }
-    return clients[0]?.id || '';
+    return initialClients[0]?.id || '';
   });
 
-  const [currentRole, setCurrentRole] = useState(() => {
-    const savedUser = localStorage.getItem('gymweb_user');
-    if (savedUser) {
-      const u = JSON.parse(savedUser);
-      return u.role;
-    }
-    return 'admin';
-  });
+  const [activeTab, setActiveTab] = useState('home'); // 'home' or 'clients' for admin
 
-  const [activeTab, setActiveTab] = useState('home'); // 'home' or 'clients' for admin dashboard tabs
-
-  // Attempt to load clients list from backend on mount
-  useEffect(() => {
-    const checkBackendAndLoad = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/clients`);
-        if (res.ok) {
-          const data = await res.json();
-          setClients(data);
-          setIsBackendConnected(true);
-          console.log('Successfully connected to Gym Backend API.');
-        } else {
-          throw new Error('Failed to load from backend');
+  // Helper to fetch clients list as Admin
+  const fetchAdminClients = useCallback(async (token) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/clients`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
-      } catch (err) {
-        console.warn('Backend API not available. Operating in local localStorage mode.', err);
-        setIsBackendConnected(false);
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const normalizedClients = data.map(normalizeClientWorkouts);
+          setClients(normalizedClients);
+          setActiveClientId(prev => {
+            const exists = normalizedClients.some(c => c.id === prev);
+            return exists ? prev : normalizedClients[0].id;
+          });
+        }
+        setIsBackendConnected(true);
       }
-    };
-    checkBackendAndLoad();
+    } catch (err) {
+      console.warn('Failed to fetch clients from backend:', err);
+    }
   }, [API_URL]);
 
-  // Persist local copy as a secondary backup
-  useEffect(() => {
-    localStorage.setItem('gymweb_clients', JSON.stringify(clients));
-  }, [clients]);
+  // Helper to fetch client's own profile as Client
+  const fetchClientSelfProfile = useCallback(async (token) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/client/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const normalized = normalizeClientWorkouts(data);
+        setClients([normalized]);
+        setActiveClientId(normalized.id);
+        setIsBackendConnected(true);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch client self profile:', err);
+    }
+  }, [API_URL]);
 
+  // Session Validation & Restoration on Boot
+  useEffect(() => {
+    const validateSession = async () => {
+      const token = sessionStorage.getItem('gymweb_token') || localStorage.getItem('gymweb_token');
+      if (!token) {
+        setIsAuthChecking(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_URL}/api/auth/me`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.user) {
+            setCurrentUser(data.user);
+            setCurrentRole(data.user.role);
+            setIsBackendConnected(true);
+
+            if (data.user.role === 'admin') {
+              await fetchAdminClients(token);
+            } else if (data.user.role === 'client') {
+              if (data.client) {
+                setClients([data.client]);
+                setActiveClientId(data.client.id);
+              } else {
+                await fetchClientSelfProfile(token);
+              }
+            }
+          }
+        } else if (res.status === 401 || res.status === 403) {
+          // Token is expired or invalid
+          console.warn('Stored token is expired or unauthorized. Logging out.');
+          localStorage.removeItem('gymweb_token');
+          localStorage.removeItem('gymweb_user');
+          sessionStorage.removeItem('gymweb_token');
+          sessionStorage.removeItem('gymweb_user');
+          setAuthToken('');
+          setCurrentUser(null);
+        }
+      } catch (err) {
+        console.warn('Backend unavailable during session check:', err);
+      } finally {
+        setIsAuthChecking(false);
+      }
+    };
+
+    validateSession();
+  }, [API_URL, fetchAdminClients, fetchClientSelfProfile]);
+
+  // Synchronize currentUser with localStorage
   useEffect(() => {
     if (currentUser) {
       localStorage.setItem('gymweb_user', JSON.stringify(currentUser));
       setCurrentRole(currentUser.role);
-      if (currentUser.role === 'client') {
+      if (currentUser.role === 'client' && currentUser.clientId) {
         setActiveClientId(currentUser.clientId);
       }
     } else {
@@ -96,21 +177,211 @@ export const GymStateProvider = ({ children }) => {
     }
   }, [currentUser]);
 
-  // API Sync Helper
+  // Persist backup of clients to localStorage for offline resilience
+  useEffect(() => {
+    if (clients && clients.length > 0) {
+      localStorage.setItem('gymweb_clients', JSON.stringify(clients));
+    }
+  }, [clients]);
+
+  // API Sync Helper with Token & Ownership Route Mapping
   const syncClientToBackend = async (client) => {
-    if (!isBackendConnected) return;
+    const token = localStorage.getItem('gymweb_token') || authToken;
+    if (!token) return;
+
     try {
-      await fetch(`${API_URL}/api/clients/${client.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(client)
-      });
+      if (currentRole === 'client') {
+        // Client updates their own record via /api/client/me
+        await fetch(`${API_URL}/api/client/me`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(client)
+        });
+      } else {
+        // Admin updates any client record via /api/clients/:id
+        await fetch(`${API_URL}/api/clients/${client.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(client)
+        });
+      }
     } catch (err) {
       console.error('Failed to sync client update to backend:', err);
     }
   };
 
+  // Auth: Login with Remember Me support
+  const login = async (role, username, password, rememberMe = false) => {
+    const rawUser = (username || '').trim();
+    const cleanPass = (password || '').trim();
+
+    try {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role, username: rawUser, password: cleanPass, rememberMe })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.token) {
+        if (rememberMe) {
+          localStorage.setItem('gymweb_token', data.token);
+          localStorage.setItem('gymweb_user', JSON.stringify(data.user));
+          sessionStorage.removeItem('gymweb_token');
+          sessionStorage.removeItem('gymweb_user');
+        } else {
+          sessionStorage.setItem('gymweb_token', data.token);
+          sessionStorage.setItem('gymweb_user', JSON.stringify(data.user));
+          localStorage.removeItem('gymweb_token');
+          localStorage.removeItem('gymweb_user');
+        }
+
+        setAuthToken(data.token);
+        setCurrentUser(data.user);
+        setCurrentRole(data.user.role);
+        setIsBackendConnected(true);
+
+        if (data.user.role === 'admin') {
+          await fetchAdminClients(data.token);
+        } else if (data.user.role === 'client') {
+          if (data.client) {
+            setClients([data.client]);
+            setActiveClientId(data.client.id);
+          } else {
+            await fetchClientSelfProfile(data.token);
+          }
+        }
+
+        return { success: true };
+      }
+
+      return {
+        success: false,
+        message: data.message || 'Incorrect username or password.'
+      };
+    } catch (err) {
+      console.error('Login error:', err);
+      return {
+        success: false,
+        message: 'Could not connect to authentication server. Please check your connection and try again.'
+      };
+    }
+  };
+
+  // Auth: Logout (Clears all tokens and session data)
+  const logout = () => {
+    localStorage.removeItem('gymweb_token');
+    localStorage.removeItem('gymweb_user');
+    sessionStorage.removeItem('gymweb_token');
+    sessionStorage.removeItem('gymweb_user');
+    setAuthToken('');
+    setCurrentUser(null);
+    setCurrentRole('client');
+  };
+
+  // Auth: Forgot Password (Request Token)
+  const forgotPassword = async (identifier) => {
+    try {
+      const res = await fetch(`${API_URL}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier })
+      });
+      return await res.json();
+    } catch (err) {
+      console.error('Forgot password error:', err);
+      return {
+        success: false,
+        message: 'Could not connect to authentication server. Please try again.'
+      };
+    }
+  };
+
+  // Auth: Reset Password (Submit Token & New Password)
+  const resetPassword = async (token, newPassword) => {
+    try {
+      const res = await fetch(`${API_URL}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, newPassword })
+      });
+      return await res.json();
+    } catch (err) {
+      console.error('Reset password error:', err);
+      return {
+        success: false,
+        message: 'Could not connect to authentication server. Please try again.'
+      };
+    }
+  };
+
+  // Auth: Verify Client Username (Step 1 of Registration)
+  const verifyClientUsername = async (username) => {
+    try {
+      const res = await fetch(`${API_URL}/api/auth/verify-username`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim() })
+      });
+      const data = await res.json();
+      return data;
+    } catch (err) {
+      console.error('Backend username verification error:', err);
+      return {
+        success: false,
+        message: 'Unable to reach the server to verify username. Please try again.'
+      };
+    }
+  };
+
+  // Auth: Register Client Password (Step 2 of Registration)
+  const registerClientPassword = async (username, password) => {
+    try {
+      const res = await fetch(`${API_URL}/api/auth/register-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.token) {
+        localStorage.setItem('gymweb_token', data.token);
+        localStorage.setItem('gymweb_user', JSON.stringify(data.user));
+        setAuthToken(data.token);
+        setCurrentUser(data.user);
+        setCurrentRole('client');
+        setIsBackendConnected(true);
+
+        if (data.client) {
+          setClients([data.client]);
+          setActiveClientId(data.client.id);
+        }
+
+        return { success: true };
+      }
+
+      return {
+        success: false,
+        message: data.message || 'Failed to register password.'
+      };
+    } catch (err) {
+      console.error('Password registration error:', err);
+      return {
+        success: false,
+        message: 'Network error during registration. Please try again.'
+      };
+    }
+  };
+
+  // Client Management: Register New Client (Admin Only)
   const registerClient = async (clientData) => {
+    const token = localStorage.getItem('gymweb_token') || authToken;
     const newId = clientData.name.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
     const newClient = {
       id: newId,
@@ -124,11 +395,10 @@ export const GymStateProvider = ({ children }) => {
       membershipExpiryDate: clientData.membershipExpiryDate || new Date(Date.now() + 365*24*60*60*1000).toISOString().split('T')[0],
       status: clientData.status || 'Active',
       passwordCreated: false,
-      passwordHash: null,
       location: clientData.location || "Los Angeles, CA",
       clientSince: new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }),
       height: clientData.height || "5'9\"",
-      photo: "/images/therese.webp", // default fallback photo
+      photo: "/images/therese.webp",
       fitnessLevel: clientData.fitnessLevel || "Moderate",
       equipmentPreference: clientData.equipmentPreference || "Bodyweight",
       goals: clientData.goals || [],
@@ -191,13 +461,16 @@ export const GymStateProvider = ({ children }) => {
 
     setClients(prev => [...prev, newClient]);
     setActiveClientId(newId);
-    setActiveTab('home'); // Switch tab back to single client view to load profile
+    setActiveTab('home');
 
-    if (isBackendConnected) {
+    if (token) {
       try {
         await fetch(`${API_URL}/api/clients`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
           body: JSON.stringify(newClient)
         });
       } catch (err) {
@@ -206,6 +479,46 @@ export const GymStateProvider = ({ children }) => {
     }
   };
 
+  // Client Management: Delete Client (Admin Only)
+  const deleteClientProfile = async (clientId) => {
+    const token = localStorage.getItem('gymweb_token') || authToken;
+    setClients(prev => prev.filter(c => c.id !== clientId));
+
+    if (activeClientId === clientId) {
+      const remaining = clients.filter(c => c.id !== clientId);
+      if (remaining.length > 0) {
+        setActiveClientId(remaining[0].id);
+      }
+    }
+
+    if (token) {
+      try {
+        await fetch(`${API_URL}/api/clients/${clientId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+      } catch (err) {
+        console.error('Failed to delete client on backend:', err);
+      }
+    }
+  };
+
+  // Client Management: Toggle Status (Active / Inactive)
+  const updateClientStatus = (clientId, newStatus) => {
+    let updatedClient = null;
+    setClients(prev => prev.map(c => {
+      if (c.id === clientId) {
+        updatedClient = { ...c, status: newStatus };
+        return updatedClient;
+      }
+      return c;
+    }));
+    if (updatedClient) syncClientToBackend(updatedClient);
+  };
+
+  // Update Client Profile (Demographics)
   const updateClientProfile = (clientId, details) => {
     let updatedClient = null;
     setClients(prev => prev.map(c => {
@@ -229,190 +542,12 @@ export const GymStateProvider = ({ children }) => {
       }
       return c;
     }));
-
     if (updatedClient) syncClientToBackend(updatedClient);
   };
 
-  const login = async (role, username, password) => {
-    const rawUser = (username || '').trim();
-    const cleanUser = rawUser.toLowerCase().replace(/^@/, '');
-    const cleanPass = (password || '').trim();
+  const activeClient = clients.find(c => c.id === activeClientId) || clients[0] || null;
 
-    // 1. Always attempt backend authentication first with a safety timeout
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
-      const res = await fetch(`${API_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role, username: rawUser, password: cleanPass }),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setCurrentUser(data.user);
-        setIsBackendConnected(true);
-        return { success: true };
-      }
-      if (data && data.message && res.status !== 500 && res.status !== 404) {
-        // Backend actively returned an error; continue to local fallback as safety backup
-      }
-    } catch (err) {
-      console.warn('Backend login request did not succeed, proceeding with local credentials validation:', err);
-    }
-
-    // 2. Resilient Local Fallback (Handles offline, Render cold start, or local dev)
-    if (role === 'admin') {
-      const hashedPass = await hashPassword(cleanPass);
-      const isUserAdmin = cleanUser === 'admin' || cleanUser === 'brandon' || cleanUser === 'coach';
-      const isPassCorrect = 
-        cleanPass === 'password' || 
-        cleanPass.toLowerCase() === 'password' || 
-        hashedPass === '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8' || 
-        hashedPass === '5e88376ec2949e29f3d952c109206116a47761122b1766e4e472271002540ea3';
-
-      if (isUserAdmin && isPassCorrect) {
-        const u = { name: 'Coach Brandon', username: '@brandon', role: 'admin' };
-        setCurrentUser(u);
-        return { success: true };
-      }
-      return { success: false, message: 'Incorrect username or password.' };
-    } else {
-      const cleanInputUser = cleanUser;
-      const client = clients.find(c => {
-        const cleanClientUser = (c.username || '').toLowerCase().replace(/^@/, '');
-        return cleanClientUser === cleanInputUser;
-      });
-
-      if (!client) {
-        return { success: false, message: 'Incorrect username or password.' };
-      }
-
-      if (client.status === 'Inactive') {
-        return { success: false, message: 'Your account is currently inactive. Please contact the gym administrator.' };
-      }
-
-      const hashedInputPass = await hashPassword(cleanPass);
-      const isClientPassCorrect = 
-        cleanPass === 'password' || 
-        cleanPass.toLowerCase() === 'password' || 
-        client.passwordHash === hashedInputPass ||
-        hashedInputPass === '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8' ||
-        client.passwordHash === '5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8' ||
-        client.passwordHash === '5e88376ec2949e29f3d952c109206116a47761122b1766e4e472271002540ea3';
-
-      if (isClientPassCorrect) {
-        const u = { name: client.name, username: client.username, role: 'client', clientId: client.id };
-        setCurrentUser(u);
-        return { success: true };
-      }
-
-      return { success: false, message: 'Incorrect username or password.' };
-    }
-  };
-
-  const verifyClientUsername = async (username) => {
-    const cleanUser = username.trim().toLowerCase();
-
-    if (isBackendConnected) {
-      try {
-        const res = await fetch(`${API_URL}/api/auth/verify-username`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          return data;
-        }
-      } catch (err) {
-        console.error('Backend username verification error, falling back to local:', err);
-      }
-    }
-
-    // Local Storage Fallback
-    const cleanInputUser = cleanUser.startsWith('@') ? cleanUser.slice(1) : cleanUser;
-    const client = clients.find(c => {
-      const cleanClientUser = c.username.toLowerCase().startsWith('@') ? c.username.toLowerCase().slice(1) : c.username.toLowerCase();
-      return cleanClientUser === cleanInputUser;
-    });
-
-    if (!client) {
-      return { success: false, code: 'NOT_FOUND', message: 'Username not found. Please check your username or contact the gym administrator.' };
-    }
-    if (client.passwordCreated) {
-      return { success: false, code: 'ALREADY_REGISTERED', message: 'This account is already registered. Please login instead.' };
-    }
-    if (client.status === 'Inactive') {
-      return { success: false, code: 'INACTIVE', message: 'Your account is currently inactive. Please contact the gym administrator.' };
-    }
-    return { success: true, client };
-  };
-
-  const registerClientPassword = async (username, password) => {
-    const cleanUser = username.trim().toLowerCase();
-    const cleanInputUser = cleanUser.startsWith('@') ? cleanUser.slice(1) : cleanUser;
-
-    if (isBackendConnected) {
-      try {
-        const res = await fetch(`${API_URL}/api/auth/register-password`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          // Update local state too
-          const hashed = await hashPassword(password);
-          setClients(prev => prev.map(c => {
-            const cleanClientUser = c.username.toLowerCase().startsWith('@') ? c.username.toLowerCase().slice(1) : c.username.toLowerCase();
-            if (cleanClientUser === cleanInputUser) {
-              return {
-                ...c,
-                passwordCreated: true,
-                passwordHash: hashed
-              };
-            }
-            return c;
-          }));
-          return { success: true };
-        }
-        return { success: false, message: data.message || 'Failed to update password.' };
-      } catch (err) {
-        console.error('Backend password registration error, falling back to local:', err);
-      }
-    }
-
-    // Local Storage Fallback
-    const hashed = await hashPassword(password);
-    let updated = false;
-    const newClients = clients.map(c => {
-      const cleanClientUser = c.username.toLowerCase().startsWith('@') ? c.username.toLowerCase().slice(1) : c.username.toLowerCase();
-      if (cleanClientUser === cleanInputUser) {
-        updated = true;
-        return {
-          ...c,
-          passwordCreated: true,
-          passwordHash: hashed
-        };
-      }
-      return c;
-    });
-
-    if (updated) {
-      setClients(newClients);
-      return { success: true };
-    }
-    return { success: false, message: 'Failed to update password. User not found.' };
-  };
-
-  const logout = () => {
-    setCurrentUser(null);
-  };
-
-  const activeClient = clients.find(c => c.id === activeClientId);
-
+  // Fitness Program Methods
   const updateGoals = (clientId, newGoals) => {
     let updatedClient = null;
     setClients(prev => prev.map(c => {
@@ -440,7 +575,6 @@ export const GymStateProvider = ({ children }) => {
           return m;
         });
 
-        // Also append to history for charting if we update weight
         let updatedHistory = [...(c.metricsHistory || [])];
         if (metricId === 'weight') {
           const lastH = updatedHistory[updatedHistory.length - 1];
@@ -488,20 +622,36 @@ export const GymStateProvider = ({ children }) => {
     let updatedClient = null;
     setClients(prev => prev.map(c => {
       if (c.id === clientId) {
-        const workout = c.dailyWorkouts[dayId];
+        const norm = normalizeClientWorkouts(c);
+        const workout = norm.dailyWorkouts[dayId];
         if (!workout) return c;
 
         const updatedExercises = workout.exercises.map(ex => {
           if (ex.id === exerciseId) {
-            return { ...ex, completed: !ex.completed };
+            const nextCompleted = !ex.completed;
+            const nextStatus = nextCompleted ? 'completed' : 'not_started';
+            const updatedSets = (ex.setRecords || []).map(s => ({
+              ...s,
+              status: nextCompleted ? 'completed' : 'pending',
+              actualReps: nextCompleted ? (s.actualReps || s.targetReps) : null,
+              weight: nextCompleted ? (s.weight || (ex.isBodyweight ? null : ex.suggestedWeight)) : null,
+              completedAt: nextCompleted ? (s.completedAt || new Date().toISOString()) : null
+            }));
+
+            return {
+              ...ex,
+              completed: nextCompleted,
+              status: nextStatus,
+              skipReason: nextCompleted ? '' : ex.skipReason,
+              setRecords: updatedSets
+            };
           }
           return ex;
         });
 
-        // Calculate if day is complete
         const allDone = updatedExercises.length > 0 && updatedExercises.every(ex => ex.completed);
 
-        const updatedWeeklyProgress = c.weeklyProgress.map(day => {
+        const updatedWeeklyProgress = norm.weeklyProgress.map(day => {
           if (day.id === dayId) {
             return { ...day, completed: allDone };
           }
@@ -509,10 +659,10 @@ export const GymStateProvider = ({ children }) => {
         });
 
         updatedClient = {
-          ...c,
+          ...norm,
           weeklyProgress: updatedWeeklyProgress,
           dailyWorkouts: {
-            ...c.dailyWorkouts,
+            ...norm.dailyWorkouts,
             [dayId]: {
               ...workout,
               exercises: updatedExercises
@@ -526,22 +676,68 @@ export const GymStateProvider = ({ children }) => {
     if (updatedClient) syncClientToBackend(updatedClient);
   };
 
-  const addExercise = (clientId, dayId, exercise) => {
+  const updateSetRecord = async (clientId, dayId, exerciseId, setNumber, updates) => {
     let updatedClient = null;
+    let targetExercise = null;
+
     setClients(prev => prev.map(c => {
       if (c.id === clientId) {
-        const workout = c.dailyWorkouts[dayId] || { name: "Custom Workout", duration: "30 minutes", exercises: [] };
-        const newExercise = {
-          id: 'ex_' + Date.now(),
-          completed: false,
-          image: exercise.image || '/images/exercise_squat.webp',
-          ...exercise
-        };
+        const norm = normalizeClientWorkouts(c);
+        const workout = norm.dailyWorkouts[dayId];
+        if (!workout) return c;
 
-        const updatedExercises = [...workout.exercises, newExercise];
-        // recalculate day completion
-        const allDone = updatedExercises.length > 0 && updatedExercises.every(ex => ex.completed);
-        const updatedWeeklyProgress = c.weeklyProgress.map(day => {
+        const num = parseInt(setNumber, 10);
+        const updatedExercises = workout.exercises.map(ex => {
+          if (ex.id === exerciseId) {
+            const updatedSets = (ex.setRecords || []).map(s => {
+              if (s.setNumber === num) {
+                const nextStatus = updates.status !== undefined ? updates.status : s.status;
+                const nextActualReps = updates.actualReps !== undefined
+                  ? (updates.actualReps !== '' && updates.actualReps !== null ? parseInt(updates.actualReps, 10) : null)
+                  : s.actualReps;
+                const nextWeight = updates.weight !== undefined
+                  ? (updates.weight !== '' && updates.weight !== null ? parseFloat(updates.weight) : null)
+                  : s.weight;
+                const nextCompletedAt = nextStatus === 'completed'
+                  ? (s.completedAt || new Date().toISOString())
+                  : (nextStatus === 'pending' ? null : (s.completedAt || new Date().toISOString()));
+
+                return {
+                  ...s,
+                  status: nextStatus,
+                  actualReps: nextActualReps,
+                  weight: nextWeight,
+                  completedAt: nextCompletedAt
+                };
+              }
+              return s;
+            });
+
+            const completedCount = updatedSets.filter(s => s.status === 'completed').length;
+            const skippedCount = updatedSets.filter(s => s.status === 'skipped').length;
+            const totalSets = updatedSets.length;
+
+            let exStatus = 'not_started';
+            if (completedCount + skippedCount === totalSets && totalSets > 0) {
+              exStatus = completedCount > 0 ? 'completed' : 'skipped';
+            } else if (completedCount > 0 || skippedCount > 0) {
+              exStatus = 'in_progress';
+            }
+
+            const isDone = exStatus === 'completed';
+            targetExercise = {
+              ...ex,
+              status: exStatus,
+              completed: isDone,
+              setRecords: updatedSets
+            };
+            return targetExercise;
+          }
+          return ex;
+        });
+
+        const allDone = updatedExercises.length > 0 && updatedExercises.every(ex => ex.completed || ex.status === 'completed');
+        const updatedWeeklyProgress = norm.weeklyProgress.map(day => {
           if (day.id === dayId) {
             return { ...day, completed: allDone };
           }
@@ -549,10 +745,257 @@ export const GymStateProvider = ({ children }) => {
         });
 
         updatedClient = {
-          ...c,
+          ...norm,
           weeklyProgress: updatedWeeklyProgress,
           dailyWorkouts: {
-            ...c.dailyWorkouts,
+            ...norm.dailyWorkouts,
+            [dayId]: {
+              ...workout,
+              exercises: updatedExercises
+            }
+          }
+        };
+        return updatedClient;
+      }
+      return c;
+    }));
+
+    const token = localStorage.getItem('gymweb_token') || authToken;
+    if (token) {
+      try {
+        await fetch(`${API_URL}/api/workouts/set-progress`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            clientId,
+            dayKey: dayId,
+            exerciseId,
+            setNumber,
+            actualReps: updates.actualReps,
+            weight: updates.weight,
+            status: updates.status
+          })
+        });
+      } catch (err) {
+        console.warn('Failed to sync set progress to backend endpoint:', err);
+        if (updatedClient) syncClientToBackend(updatedClient);
+      }
+    } else if (updatedClient) {
+      syncClientToBackend(updatedClient);
+    }
+
+    return { client: updatedClient, exercise: targetExercise };
+  };
+
+  const skipSet = (clientId, dayId, exerciseId, setNumber) => {
+    return updateSetRecord(clientId, dayId, exerciseId, setNumber, { status: 'skipped' });
+  };
+
+  const skipExercise = async (clientId, dayId, exerciseId, reason = '') => {
+    let updatedClient = null;
+    let targetExercise = null;
+
+    setClients(prev => prev.map(c => {
+      if (c.id === clientId) {
+        const norm = normalizeClientWorkouts(c);
+        const workout = norm.dailyWorkouts[dayId];
+        if (!workout) return c;
+
+        const updatedExercises = workout.exercises.map(ex => {
+          if (ex.id === exerciseId) {
+            const updatedSets = (ex.setRecords || []).map(s => {
+              if (s.status === 'pending') {
+                return { ...s, status: 'skipped', completedAt: new Date().toISOString() };
+              }
+              return s;
+            });
+            targetExercise = {
+              ...ex,
+              status: 'skipped',
+              completed: false,
+              skipReason: reason || 'Skipped by client',
+              setRecords: updatedSets
+            };
+            return targetExercise;
+          }
+          return ex;
+        });
+
+        const allDoneOrSkipped = updatedExercises.length > 0 && updatedExercises.every(ex => ex.completed || ex.status === 'completed' || ex.status === 'skipped');
+        const updatedWeeklyProgress = norm.weeklyProgress.map(day => {
+          if (day.id === dayId) {
+            return { ...day, completed: allDoneOrSkipped };
+          }
+          return day;
+        });
+
+        updatedClient = {
+          ...norm,
+          weeklyProgress: updatedWeeklyProgress,
+          dailyWorkouts: {
+            ...norm.dailyWorkouts,
+            [dayId]: {
+              ...workout,
+              exercises: updatedExercises
+            }
+          }
+        };
+        return updatedClient;
+      }
+      return c;
+    }));
+
+    const token = localStorage.getItem('gymweb_token') || authToken;
+    if (token) {
+      try {
+        await fetch(`${API_URL}/api/workouts/skip-exercise`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ clientId, dayKey: dayId, exerciseId, reason })
+        });
+      } catch (err) {
+        console.warn('Failed to sync exercise skip to backend endpoint:', err);
+        if (updatedClient) syncClientToBackend(updatedClient);
+      }
+    } else if (updatedClient) {
+      syncClientToBackend(updatedClient);
+    }
+
+    return { client: updatedClient, exercise: targetExercise };
+  };
+
+  const saveWorkoutSession = async (sessionData) => {
+    const token = localStorage.getItem('gymweb_token') || authToken;
+    const targetCId = sessionData.clientId || activeClientId;
+    const newSession = {
+      id: sessionData.id || `ws_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      clientId: targetCId,
+      workoutId: sessionData.workoutId || `${targetCId}_${sessionData.dayKey || 'workout'}`,
+      dayKey: sessionData.dayKey || 'thu',
+      workoutName: sessionData.workoutName || 'Workout Session',
+      durationSeconds: sessionData.durationSeconds || 0,
+      startedAt: sessionData.startedAt || new Date(Date.now() - (sessionData.durationSeconds || 1800) * 1000).toISOString(),
+      completedAt: sessionData.completedAt || new Date().toISOString(),
+      status: sessionData.status || 'completed',
+      summary: sessionData.summary || {},
+      setRecords: sessionData.setRecords || []
+    };
+
+    setClients(prev => prev.map(c => {
+      if (c.id === targetCId) {
+        const existingSessions = Array.isArray(c.workoutSessions) ? c.workoutSessions : [];
+        return {
+          ...c,
+          workoutSessions: [newSession, ...existingSessions.filter(s => s.id !== newSession.id)]
+        };
+      }
+      return c;
+    }));
+
+    if (token) {
+      try {
+        const res = await fetch(`${API_URL}/api/workouts/sessions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(newSession)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          return data.session || newSession;
+        }
+      } catch (err) {
+        console.error('Failed to save workout session to backend:', err);
+      }
+    }
+    return newSession;
+  };
+
+  const fetchWorkoutSessions = async (clientId) => {
+    const token = localStorage.getItem('gymweb_token') || authToken;
+    if (!token || !clientId) return [];
+    try {
+      const res = await fetch(`${API_URL}/api/workouts/sessions/${clientId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.sessions)) {
+          setClients(prev => prev.map(c => {
+            if (c.id === clientId) {
+              return { ...c, workoutSessions: data.sessions };
+            }
+            return c;
+          }));
+          return data.sessions;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch workout sessions from backend:', err);
+    }
+    const current = clients.find(c => c.id === clientId);
+    return current?.workoutSessions || [];
+  };
+
+  const fetchProgressComparison = async (clientId) => {
+    const token = localStorage.getItem('gymweb_token') || authToken;
+    if (!token || !clientId) return null;
+    try {
+      const res = await fetch(`${API_URL}/api/workouts/progress-comparison/${clientId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data;
+      }
+    } catch (err) {
+      console.warn('Failed to fetch progress comparison from backend:', err);
+    }
+    const current = clients.find(c => c.id === clientId);
+    const sessions = current?.workoutSessions || [];
+    return compareSessions(sessions[0], sessions[1]);
+  };
+
+  const addExercise = (clientId, dayId, exercise) => {
+    let updatedClient = null;
+    setClients(prev => prev.map(c => {
+      if (c.id === clientId) {
+        const norm = normalizeClientWorkouts(c);
+        const workout = norm.dailyWorkouts[dayId] || { name: "Custom Workout", duration: "30 minutes", exercises: [] };
+        const rawExercise = {
+          id: 'ex_' + Date.now(),
+          completed: false,
+          image: exercise.image || '/images/exercise_squat.webp',
+          ...exercise
+        };
+        const newExercise = normalizeExercise(rawExercise);
+
+        const updatedExercises = [...workout.exercises, newExercise];
+        const allDone = updatedExercises.length > 0 && updatedExercises.every(ex => ex.completed);
+        const updatedWeeklyProgress = norm.weeklyProgress.map(day => {
+          if (day.id === dayId) {
+            return { ...day, completed: allDone };
+          }
+          return day;
+        });
+
+        updatedClient = {
+          ...norm,
+          weeklyProgress: updatedWeeklyProgress,
+          dailyWorkouts: {
+            ...norm.dailyWorkouts,
             [dayId]: {
               ...workout,
               exercises: updatedExercises
@@ -570,18 +1013,24 @@ export const GymStateProvider = ({ children }) => {
     let updatedClient = null;
     setClients(prev => prev.map(c => {
       if (c.id === clientId) {
-        const workout = c.dailyWorkouts[dayId];
+        const norm = normalizeClientWorkouts(c);
+        const workout = norm.dailyWorkouts[dayId];
         if (!workout) return c;
 
         const updatedExercises = workout.exercises.map(ex => {
           if (ex.id === exerciseId) {
-            return { ...ex, ...updatedFields };
+            const merged = { ...ex, ...updatedFields };
+            // If sets count changed, re-normalize
+            if (updatedFields.sets !== undefined || updatedFields.targetReps !== undefined || updatedFields.suggestedWeight !== undefined) {
+              return normalizeExercise(merged);
+            }
+            return merged;
           }
           return ex;
         });
 
         const allDone = updatedExercises.length > 0 && updatedExercises.every(ex => ex.completed);
-        const updatedWeeklyProgress = c.weeklyProgress.map(day => {
+        const updatedWeeklyProgress = norm.weeklyProgress.map(day => {
           if (day.id === dayId) {
             return { ...day, completed: allDone };
           }
@@ -589,10 +1038,10 @@ export const GymStateProvider = ({ children }) => {
         });
 
         updatedClient = {
-          ...c,
+          ...norm,
           weeklyProgress: updatedWeeklyProgress,
           dailyWorkouts: {
-            ...c.dailyWorkouts,
+            ...norm.dailyWorkouts,
             [dayId]: {
               ...workout,
               exercises: updatedExercises
@@ -610,12 +1059,13 @@ export const GymStateProvider = ({ children }) => {
     let updatedClient = null;
     setClients(prev => prev.map(c => {
       if (c.id === clientId) {
-        const workout = c.dailyWorkouts[dayId];
+        const norm = normalizeClientWorkouts(c);
+        const workout = norm.dailyWorkouts[dayId];
         if (!workout) return c;
 
         const updatedExercises = workout.exercises.filter(ex => ex.id !== exerciseId);
         const allDone = updatedExercises.length > 0 && updatedExercises.every(ex => ex.completed);
-        const updatedWeeklyProgress = c.weeklyProgress.map(day => {
+        const updatedWeeklyProgress = norm.weeklyProgress.map(day => {
           if (day.id === dayId) {
             return { ...day, completed: allDone };
           }
@@ -623,15 +1073,39 @@ export const GymStateProvider = ({ children }) => {
         });
 
         updatedClient = {
-          ...c,
+          ...norm,
           weeklyProgress: updatedWeeklyProgress,
           dailyWorkouts: {
-            ...c.dailyWorkouts,
+            ...norm.dailyWorkouts,
             [dayId]: {
               ...workout,
               exercises: updatedExercises
             }
           }
+        };
+        return updatedClient;
+      }
+      return c;
+    }));
+    if (updatedClient) syncClientToBackend(updatedClient);
+  };
+
+  const updateWorkoutMeta = (clientId, dayId, name, duration) => {
+    let updatedClient = null;
+    setClients(prev => prev.map(c => {
+      if (c.id === clientId) {
+        const existingWorkout = c.dailyWorkouts[dayId] || { exercises: [] };
+        const updatedDailyWorkouts = {
+          ...c.dailyWorkouts,
+          [dayId]: {
+            ...existingWorkout,
+            name: name || existingWorkout.name || "Custom Workout",
+            duration: duration || existingWorkout.duration || "30 minutes"
+          }
+        };
+        updatedClient = {
+          ...c,
+          dailyWorkouts: updatedDailyWorkouts
         };
         return updatedClient;
       }
@@ -701,6 +1175,47 @@ export const GymStateProvider = ({ children }) => {
     if (updatedClient) syncClientToBackend(updatedClient);
   };
 
+  const recordClientAttendance = async (clientId, date, signature) => {
+    const token = localStorage.getItem('gymweb_token') || authToken;
+    const client = clients.find(c => c.id === clientId);
+    const clientName = client ? client.name : 'Client';
+    const fallbackSig = clientName.toUpperCase().replace(/\s+/g, '_');
+
+    const newSignin = {
+      id: 's_' + Date.now(),
+      date: date || new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
+      signature: signature || fallbackSig
+    };
+
+    let updatedClient = null;
+    setClients(prev => prev.map(c => {
+      if (c.id === clientId) {
+        updatedClient = {
+          ...c,
+          signinHistory: [newSignin, ...(c.signinHistory || [])]
+        };
+        return updatedClient;
+      }
+      return c;
+    }));
+
+    if (token) {
+      try {
+        await fetch(`${API_URL}/api/clients/${clientId}/attendance`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ date: newSignin.date, signature: newSignin.signature })
+        });
+      } catch (err) {
+        console.error('Failed to sync attendance to backend:', err);
+      }
+    }
+    return newSignin;
+  };
+
   return (
     <GymStateContext.Provider value={{
       clients,
@@ -710,24 +1225,38 @@ export const GymStateProvider = ({ children }) => {
       currentRole,
       setCurrentRole,
       currentUser,
+      isAuthChecking,
+      isBackendConnected,
       login,
       logout,
       activeTab,
       setActiveTab,
       registerClient,
+      deleteClientProfile,
+      updateClientStatus,
       updateClientProfile,
+      updateWorkoutMeta,
       updateGoals,
       updateMetrics,
       updateFitnessAndEquipment,
       toggleExerciseCompletion,
+      updateSetRecord,
+      skipSet,
+      skipExercise,
+      saveWorkoutSession,
+      fetchWorkoutSessions,
+      fetchProgressComparison,
       addExercise,
       updateExercise,
       deleteExercise,
       addNote,
       updateNextSession,
       updateWeeklyProgressFocus,
+      recordClientAttendance,
       verifyClientUsername,
-      registerClientPassword
+      registerClientPassword,
+      forgotPassword,
+      resetPassword
     }}>
       {children}
     </GymStateContext.Provider>

@@ -3,13 +3,14 @@ import { useGymState } from '../../context/GymStateContext';
 import { Plus, Search, Calendar, Check } from 'lucide-react';
 
 export default function NotesHistorySidebar() {
-  const { activeClient, addNote } = useGymState();
+  const { activeClient, addNote, recordClientAttendance } = useGymState();
 
   const [noteSearch, setNoteSearch] = useState('');
   const [signinSearch, setSigninSearch] = useState('');
 
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [newNoteText, setNewNoteText] = useState('');
+  const [recordingSignin, setRecordingSignin] = useState(false);
 
   if (!activeClient) return null;
 
@@ -20,7 +21,7 @@ export default function NotesHistorySidebar() {
   );
 
   // Filter Signins
-  const filteredSignins = activeClient.signinHistory.filter(sig =>
+  const filteredSignins = (activeClient.signinHistory || []).filter(sig =>
     sig.date.toLowerCase().includes(signinSearch.toLowerCase())
   );
 
@@ -30,6 +31,14 @@ export default function NotesHistorySidebar() {
       setNewNoteText('');
       setIsAddingNote(false);
     }
+  };
+
+  const handleRecordSignin = async () => {
+    setRecordingSignin(true);
+    const today = new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+    const sig = activeClient.name.toUpperCase().replace(/\s+/g, '_');
+    await recordClientAttendance(activeClient.id, today, sig);
+    setRecordingSignin(false);
   };
 
   return (
@@ -122,9 +131,16 @@ export default function NotesHistorySidebar() {
         <div className="flex justify-between items-center mb-4">
           <h4 className="text-sm font-extrabold text-gray-800 tracking-wide flex items-center gap-1.5">
             <span className="w-1.5 h-3.5 bg-[#00af87] rounded-sm"></span>
-            Sign-in
+            Attendance & Sign-in
           </h4>
-          <span className="text-[10px] font-extrabold text-gray-400 tracking-wider cursor-pointer uppercase">View All</span>
+          <button
+            onClick={handleRecordSignin}
+            disabled={recordingSignin}
+            className="text-[11px] font-bold text-[#00af87] hover:opacity-85 flex items-center gap-0.5 disabled:opacity-50"
+            title="Record Attendance for today"
+          >
+            <Plus size={12} /> {recordingSignin ? 'Signing...' : '+ Check-in Today'}
+          </button>
         </div>
 
         {/* Search Sign-ins Bar */}
