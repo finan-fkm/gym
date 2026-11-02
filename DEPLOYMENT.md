@@ -67,8 +67,8 @@ If you prefer setting up each service manually through the Render Dashboard, fol
    - `NODE_ENV`: `production`
    - `DATABASE_URL`: (Paste the **Internal Database URL** copied in Step 1)
    - `JWT_SECRET`: (Generate a secure random string, minimum 32 characters)
-   - `CLIENT_URL`: `https://gym-seven-rose.vercel.app`
-   - `FRONTEND_URL`: `https://gym-seven-rose.vercel.app`
+   - `CLIENT_URL`: `https://gym-k1eimpi49-finan4.vercel.app`
+   - `FRONTEND_URL`: `https://gym-k1eimpi49-finan4.vercel.app,https://gym-seven-rose.vercel.app`
    - `ENABLE_DEMO_SEED`: `false` (set to `false` in production to protect existing member data)
 5. Click **Create Web Service**.
 6. Once deployed, copy your backend's public service URL (e.g., `https://gym-backend.onrender.com`).
@@ -145,6 +145,7 @@ If you prefer hosting the React frontend on **Vercel** for ultra-fast global CDN
 The pre-configured `vercel.json` in the root automatically routes all URL paths (like `/admin/dashboard` or `/login/client`) to `index.html`, ensuring clean browser refreshes without 404 errors.
 
 ### Live Production Endpoints
+- **Live Vercel Frontend**: `https://gym-k1eimpi49-finan4.vercel.app` (or `https://gym-seven-rose.vercel.app`)
 - **Live Backend API**: `https://gym-wm1s.onrender.com`
 - **Backend Health Check**: `https://gym-wm1s.onrender.com/api/health`
 - **Default Admin**: `admin` / `password`

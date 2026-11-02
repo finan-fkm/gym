@@ -29,3 +29,5 @@ database.backup.*.json
 
 # Local tool wrappers
 bin/
+
+.vercel

@@ -74,7 +74,7 @@ async function runSuite() {
     const corsRes = await fetch(`${BASE_URL}/api/clients`, {
       method: 'OPTIONS',
       headers: {
-        'Origin': 'https://gym-seven-rose.vercel.app',
+        'Origin': 'https://gym-k1eimpi49-finan4.vercel.app',
         'Access-Control-Request-Method': 'GET',
         'Access-Control-Request-Headers': 'Authorization, Content-Type'
       }

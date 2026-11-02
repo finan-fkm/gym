@@ -52,7 +52,7 @@ app.use(helmet({
 app.use(morgan('short'));
 
 // CORS configuration supporting CLIENT_URL, FRONTEND_URL, Vercel, localhost, and Authorization headers
-const configuredClientUrls = (process.env.CLIENT_URL || process.env.FRONTEND_URL || 'https://gym-seven-rose.vercel.app')
+const configuredClientUrls = (process.env.CLIENT_URL || process.env.FRONTEND_URL || 'https://gym-k1eimpi49-finan4.vercel.app,https://gym-seven-rose.vercel.app')
   .split(',')
   .map(s => s.trim().replace(/\/+$/, ''))
   .filter(Boolean);
@@ -63,6 +63,7 @@ const corsOrigins = Array.from(new Set([
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
+  'https://gym-k1eimpi49-finan4.vercel.app',
   'https://gym-seven-rose.vercel.app'
 ]));
 
