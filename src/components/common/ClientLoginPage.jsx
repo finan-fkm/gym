@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useGymState } from '../../context/GymStateContext';
 import { User, Lock, AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import ForgotPasswordModal from './ForgotPasswordModal';
+import BackendConnectionBox from './BackendConnectionBox';
 
 export default function ClientLoginPage({ onNavigate }) {
   const { login } = useGymState();
@@ -71,6 +72,12 @@ export default function ClientLoginPage({ onNavigate }) {
                 <span>{error}</span>
               </div>
             )}
+
+            <BackendConnectionBox 
+              theme="light" 
+              error={error} 
+              onConnected={() => setError('')} 
+            />
 
             <div>
               <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wide block mb-1.5">

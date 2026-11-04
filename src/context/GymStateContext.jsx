@@ -18,7 +18,10 @@ export const useGymState = () => {
 
 export const GymStateProvider = ({ children }) => {
   const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-  const configuredApiUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+  const [customApiUrl, setCustomApiUrl] = useState(() => {
+    return (typeof window !== 'undefined' && localStorage.getItem('gymweb_custom_api_url')) || '';
+  });
+  const configuredApiUrl = (customApiUrl || import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
   const defaultApiUrl = isLocalhost ? 'http://localhost:5000' : '';
   let rawApiUrl = configuredApiUrl || defaultApiUrl;
   if (!isLocalhost && rawApiUrl.startsWith('http://')) {
@@ -28,14 +31,34 @@ export const GymStateProvider = ({ children }) => {
     ? rawApiUrl
     : (rawApiUrl ? `https://${rawApiUrl}` : '');
 
+  const saveBackendUrl = (newUrl) => {
+    if (!newUrl) return '';
+    let formatted = newUrl.trim().replace(/\/+$/, '');
+    if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
+      formatted = `https://${formatted}`;
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gymweb_custom_api_url', formatted);
+    }
+    setCustomApiUrl(formatted);
+    return formatted;
+  };
+
+  const resetBackendUrl = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('gymweb_custom_api_url');
+    }
+    setCustomApiUrl('');
+  };
+
   useEffect(() => {
-    if (!isLocalhost && !import.meta.env.VITE_API_URL) {
+    if (!isLocalhost && !import.meta.env.VITE_API_URL && !customApiUrl) {
       console.warn(
         '⚠️ [Fit By Shahid] VITE_API_URL is not set in Vercel Environment Variables!\n' +
         'Please add VITE_API_URL pointing to your Render Web Service URL in Vercel Project Settings > Environment Variables, then redeploy.'
       );
     }
-  }, [isLocalhost]);
+  }, [isLocalhost, customApiUrl]);
 
   const [isBackendConnected, setIsBackendConnected] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
@@ -246,7 +269,7 @@ export const GymStateProvider = ({ children }) => {
     if (!API_URL && !isLocalhost) {
       return {
         success: false,
-        message: 'Backend URL is not configured. Please add VITE_API_URL in your Vercel Project Settings > Environment Variables, then redeploy.'
+        message: 'Backend URL is not configured. Please paste your Render backend URL into the Backend Connection box below, or set VITE_API_URL in Vercel.'
       };
     }
 
@@ -793,6 +816,12 @@ export const GymStateProvider = ({ children }) => {
 
   // Auth: Forgot Password (Request Token)
   const forgotPassword = async (identifier) => {
+    if (!API_URL && !isLocalhost) {
+      return {
+        success: false,
+        message: 'Backend URL is not configured. Please paste your Render backend URL into the Backend Connection box on the login page.'
+      };
+    }
     try {
       const res = await fetch(`${API_URL}/api/auth/forgot-password`, {
         method: 'POST',
@@ -811,6 +840,12 @@ export const GymStateProvider = ({ children }) => {
 
   // Auth: Reset Password (Submit Token & New Password)
   const resetPassword = async (token, newPassword) => {
+    if (!API_URL && !isLocalhost) {
+      return {
+        success: false,
+        message: 'Backend URL is not configured. Please paste your Render backend URL into the Backend Connection box on the login page.'
+      };
+    }
     try {
       const res = await fetch(`${API_URL}/api/auth/reset-password`, {
         method: 'POST',
@@ -829,6 +864,12 @@ export const GymStateProvider = ({ children }) => {
 
   // Auth: Verify Client Username (Step 1 of Registration)
   const verifyClientUsername = async (username) => {
+    if (!API_URL && !isLocalhost) {
+      return {
+        success: false,
+        message: 'Backend URL is not configured. Please paste your Render backend URL into the Backend Connection box on the login page.'
+      };
+    }
     try {
       const res = await fetch(`${API_URL}/api/auth/verify-username`, {
         method: 'POST',
@@ -848,6 +889,12 @@ export const GymStateProvider = ({ children }) => {
 
   // Auth: Register Client Password (Step 2 of Registration)
   const registerClientPassword = async (username, password) => {
+    if (!API_URL && !isLocalhost) {
+      return {
+        success: false,
+        message: 'Backend URL is not configured. Please paste your Render backend URL into the Backend Connection box on the login page.'
+      };
+    }
     try {
       const res = await fetch(`${API_URL}/api/auth/register-password`, {
         method: 'POST',
@@ -1724,6 +1771,9 @@ export const GymStateProvider = ({ children }) => {
 
   return (
     <GymStateContext.Provider value={{
+      API_URL,
+      saveBackendUrl,
+      resetBackendUrl,
       clients,
       activeClientId,
       setActiveClientId,
