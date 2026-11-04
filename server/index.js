@@ -86,9 +86,15 @@ app.use(helmet({
 // Enable HTTP request logging
 app.use(morgan('short'));
 
-// Strict CORS configuration: Allow ONLY explicitly configured production frontend domains
-const configuredClientUrls = (process.env.CLIENT_URL || process.env.FRONTEND_URL || 'https://gym-k1eimpi49-finan4.vercel.app')
-  .split(',')
+// Strict CORS configuration: Allow explicitly configured production domains and Vercel frontends
+const configuredClientUrls = [
+  process.env.CLIENT_URL,
+  process.env.FRONTEND_URL,
+  'https://gym-k1eimpi49-finan4.vercel.app',
+  'https://gym-seven-rose.vercel.app'
+]
+  .filter(Boolean)
+  .flatMap(s => s.split(','))
   .map(s => s.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 
@@ -99,31 +105,31 @@ const devOrigins = [
   'http://localhost:5055' // test suite
 ];
 
-const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? Array.from(new Set(configuredClientUrls))
-  : Array.from(new Set([...configuredClientUrls, ...devOrigins]));
+const allowedOrigins = Array.from(new Set([...configuredClientUrls, ...devOrigins]));
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow server-to-server requests or tools with no origin header (like curl, Render health checks)
     if (!origin) return callback(null, true);
 
-    // In development or test mode, permit local development origins
-    if (process.env.NODE_ENV !== 'production') {
-      if (allowedOrigins.includes(origin) || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
-        return callback(null, true);
-      }
+    // Permit local development origins
+    if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+      return callback(null, true);
     }
 
-    // In production, strictly match explicitly allowed origins
+    // Permit any Vercel deployment domain (including preview URLs, branch URLs, production aliases)
+    if (origin.endsWith('.vercel.app')) {
+      return callback(null, true);
+    }
+
+    // Permit explicitly configured production frontend domains
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
 
-    // Block any unapproved origin
-    const error = new Error(`CORS policy violation: Origin '${origin}' is not authorized to access this resource.`);
-    error.status = 403;
-    return callback(error);
+    // Log unauthorized origin and reject safely without crashing
+    console.warn(`[CORS] Rejected unauthorized origin: ${origin}`);
+    return callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

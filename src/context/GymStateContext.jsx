@@ -345,7 +345,7 @@ export const GymStateProvider = ({ children }) => {
       return {
         success: false,
         message: isRemote
-          ? 'Could not reach backend server. If your Render service is on the free tier, it may be waking up (takes ~30-50s). Please wait a moment and try again.'
+          ? `Could not reach backend (${API_URL}). If your Render service is on the free tier, it sleeps when idle and takes ~30–50s to wake up. Click 'Connect' in the box above to wake it up, or wait a few seconds and try again.`
           : 'Could not connect to authentication server. Please check your connection and try again.'
       };
     }

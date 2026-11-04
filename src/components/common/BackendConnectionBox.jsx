@@ -42,39 +42,69 @@ export default function BackendConnectionBox({ theme = 'dark', error = '', onCon
     }
 
     setIsTesting(true);
-    setStatusType('');
-    setStatusMessage('Testing connection to backend...');
+    setStatusType('warning');
+    setStatusMessage('Checking server status...');
 
     const formatted = saveBackendUrl(trimmed);
     setUrlInput(formatted);
 
+    // Initial check (5 seconds)
+    let isAwake = false;
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
-
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       const res = await fetch(`${formatted}/health`, {
         method: 'GET',
         signal: controller.signal
       });
       clearTimeout(timeoutId);
-
       if (res.ok) {
-        setStatusType('success');
-        setStatusMessage('Connected successfully! Backend is online and ready.');
-        if (onConnected) onConnected(formatted);
-      } else {
-        setStatusType('warning');
-        setStatusMessage(`Backend reached (${res.status} ${res.statusText}). URL saved!`);
-        if (onConnected) onConnected(formatted);
+        isAwake = true;
       }
     } catch {
-      // If abort or network error, backend might be waking up on Render free tier
-      setStatusType('warning');
-      setStatusMessage('Backend URL saved! Free-tier Render servers take ~30–50s to wake up from idle. Give it a moment, then try logging in.');
-      if (onConnected) onConnected(formatted);
-    } finally {
-      setIsTesting(false);
+      // Server might be sleeping on free tier
     }
+
+    if (isAwake) {
+      setStatusType('success');
+      setStatusMessage('Connected successfully! Backend is online and ready.');
+      setIsTesting(false);
+      if (onConnected) onConnected(formatted);
+      return;
+    }
+
+    // Active Wake-Up Poller for Render Free Tier (Sleeps when idle)
+    const maxAttempts = 10;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      setStatusType('warning');
+      setStatusMessage(`Waking up Render free-tier server... Attempt ${attempt}/${maxAttempts} (~${attempt * 4}s elapsed). Please hold on.`);
+
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch(`${formatted}/health`, {
+          method: 'GET',
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          setStatusType('success');
+          setStatusMessage('Server is now awake and ready! You can log in.');
+          setIsTesting(false);
+          if (onConnected) onConnected(formatted);
+          return;
+        }
+      } catch {
+        // Still waking up
+      }
+    }
+
+    setStatusType('error');
+    setStatusMessage(`Server did not respond after 45s (${formatted}). Please check dashboard.render.com to verify your service is 'Live' and not building or failed.`);
+    setIsTesting(false);
   };
 
   const isDark = theme === 'dark';
