@@ -18,14 +18,15 @@ export const useGymState = () => {
 
 export const GymStateProvider = ({ children }) => {
   const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-  const configuredApiUrl = import.meta.env.VITE_API_URL;
-  const defaultApiUrl = isLocalhost
-    ? 'http://localhost:5000'
-    : (configuredApiUrl || 'https://gym-wm1s.onrender.com');
-  const rawApiUrl = (configuredApiUrl || defaultApiUrl).trim().replace(/\/+$/, '');
+  const configuredApiUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '');
+  const defaultApiUrl = isLocalhost ? 'http://localhost:5000' : '';
+  let rawApiUrl = configuredApiUrl || defaultApiUrl;
+  if (!isLocalhost && rawApiUrl.startsWith('http://')) {
+    rawApiUrl = rawApiUrl.replace('http://', 'https://');
+  }
   const API_URL = rawApiUrl.startsWith('http://') || rawApiUrl.startsWith('https://')
     ? rawApiUrl
-    : `https://${rawApiUrl}`;
+    : (rawApiUrl ? `https://${rawApiUrl}` : '');
 
   useEffect(() => {
     if (!isLocalhost && !import.meta.env.VITE_API_URL) {

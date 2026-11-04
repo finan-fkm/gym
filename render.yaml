@@ -30,6 +30,10 @@ services:
         fromDatabase:
           name: gym-db
           property: connectionString
+      - key: INITIAL_ADMIN_PASSWORD
+        generateValue: true
+      - key: ENABLE_DEMO_SEED
+        value: "false"
 
   # -------------------------------------------------------------
   # Static Frontend Web Service

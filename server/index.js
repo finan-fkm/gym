@@ -61,10 +61,16 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = process.env.JWT_SECRET || 'gymweb_production_jwt_secret_fitbyshahid_2026';
 
-if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'gymweb_production_jwt_secret_fitbyshahid_2026')) {
-  console.warn('WARNING: Running in production without a custom JWT_SECRET. Please configure a unique JWT_SECRET in your environment variables.');
+// JWT_SECRET is strictly mandatory in production with minimum 32 characters
+const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV !== 'production' ? 'gymweb_dev_test_jwt_secret_fitbyshahid_2026' : null);
+
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'gymweb_production_jwt_secret_fitbyshahid_2026' || process.env.JWT_SECRET.length < 32) {
+    const jwtErrMsg = 'FATAL [Production Safety]: JWT_SECRET environment variable is mandatory in production and must be a secure, random string of at least 32 characters. Do not use default or placeholder secrets.';
+    console.error(jwtErrMsg);
+    throw new Error(jwtErrMsg);
+  }
 }
 
 // Enable security headers
@@ -75,34 +81,44 @@ app.use(helmet({
 // Enable HTTP request logging
 app.use(morgan('short'));
 
-// CORS configuration supporting CLIENT_URL, FRONTEND_URL, Vercel, localhost, and Authorization headers
-const configuredClientUrls = (process.env.CLIENT_URL || process.env.FRONTEND_URL || 'https://gym-k1eimpi49-finan4.vercel.app,https://gym-seven-rose.vercel.app')
+// Strict CORS configuration: Allow ONLY explicitly configured production frontend domains
+const configuredClientUrls = (process.env.CLIENT_URL || process.env.FRONTEND_URL || 'https://gym-k1eimpi49-finan4.vercel.app')
   .split(',')
   .map(s => s.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 
-// Add default dev origins
-const corsOrigins = Array.from(new Set([
-  ...configuredClientUrls,
+const devOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'http://127.0.0.1:5173',
-  'https://gym-k1eimpi49-finan4.vercel.app',
-  'https://gym-seven-rose.vercel.app'
-]));
+  'http://localhost:5055' // test suite
+];
+
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? Array.from(new Set(configuredClientUrls))
+  : Array.from(new Set([...configuredClientUrls, ...devOrigins]));
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, postman)
+    // Allow server-to-server requests or tools with no origin header (like curl, Render health checks)
     if (!origin) return callback(null, true);
-    if (corsOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+
+    // In development or test mode, permit local development origins
+    if (process.env.NODE_ENV !== 'production') {
+      if (allowedOrigins.includes(origin) || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+        return callback(null, true);
+      }
+    }
+
+    // In production, strictly match explicitly allowed origins
+    if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    // Also allow preview vercel deployments if needed
-    if (origin.endsWith('.vercel.app')) {
-      return callback(null, true);
-    }
-    return callback(null, true); // Permissive fallback to prevent unexpected production outages
+
+    // Block any unapproved origin
+    const error = new Error(`CORS policy violation: Origin '${origin}' is not authorized to access this resource.`);
+    error.status = 403;
+    return callback(error);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -207,27 +223,43 @@ const autoSeed = async () => {
   try {
     const existingAdmin = await getAdmin('admin');
     if (!existingAdmin) {
-      console.log('No admin found. Creating default admin account...');
-      const adminPasswordHash = await bcrypt.hash('password', 10);
-      await saveAdmin('admin', adminPasswordHash);
-      console.log('Default admin account created: admin / password');
+      if (process.env.NODE_ENV === 'production') {
+        const initialAdminPass = process.env.INITIAL_ADMIN_PASSWORD;
+        if (!initialAdminPass || initialAdminPass.length < 8) {
+          const errMsg = 'FATAL [Production Safety]: No admin account exists in database. In production, INITIAL_ADMIN_PASSWORD environment variable (min 8 characters) is mandatory to initialize admin credentials securely.';
+          console.error(errMsg);
+          throw new Error(errMsg);
+        }
+        const adminPasswordHash = await bcrypt.hash(initialAdminPass, 10);
+        await saveAdmin('admin', adminPasswordHash);
+        console.log('[SECURITY] Administrator account initialized with INITIAL_ADMIN_PASSWORD.');
+      } else {
+        const adminPasswordHash = await bcrypt.hash(process.env.INITIAL_ADMIN_PASSWORD || 'password', 10);
+        await saveAdmin('admin', adminPasswordHash);
+        console.log('Test admin account initialized (admin / password).');
+      }
+    } else {
+      console.log('Admin account already exists. Skipping admin initialization.');
     }
 
     const existingClients = await getClients();
     if (existingClients.length === 0) {
-      console.log(`No clients found. Seeding ${initialClients.length} default client profiles...`);
-      const bcryptPassHash = await bcrypt.hash('password', 10);
-      for (const client of initialClients) {
-        const seededClient = JSON.parse(JSON.stringify(client));
-        if (seededClient.passwordCreated) {
-          seededClient.passwordHash = bcryptPassHash;
+      if (process.env.NODE_ENV === 'production' && process.env.ENABLE_DEMO_SEED !== 'true') {
+        console.log('Production mode detected. Demo client accounts omitted to maintain clean production database.');
+      } else {
+        console.log(`Seeding ${initialClients.length} default client profiles...`);
+        const bcryptPassHash = await bcrypt.hash('password', 10);
+        for (const client of initialClients) {
+          const seededClient = JSON.parse(JSON.stringify(client));
+          if (seededClient.passwordCreated) {
+            seededClient.passwordHash = bcryptPassHash;
+          }
+          await saveClient(seededClient);
         }
-        await saveClient(seededClient);
-        console.log(`Seeded client: ${seededClient.name} (${seededClient.username})`);
+        console.log('Client profiles seeded successfully.');
       }
-      console.log('Client profiles seeded successfully.');
     } else {
-      console.log(`Database already has ${existingClients.length} clients. Skipping seeding.`);
+      console.log(`Database already has ${existingClients.length} clients. Existing client records preserved.`);
     }
 
     // Seed trainers if table is empty
@@ -264,7 +296,12 @@ const autoSeed = async () => {
       console.log('Seeded gym settings and branding configuration.');
     }
   } catch (err) {
-    console.error('Auto-seed check error (non-fatal):', err);
+    if (process.env.NODE_ENV === 'production') {
+      console.error('Database initialization halted:', err.message);
+      throw err;
+    } else {
+      console.error('Auto-seed check error (non-fatal in dev):', err.message);
+    }
   }
 };
 

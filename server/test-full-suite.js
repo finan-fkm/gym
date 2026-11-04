@@ -1,5 +1,5 @@
 // Comprehensive Full System Automated Verification Suite
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -775,6 +775,55 @@ async function runSuite() {
       })
     });
     assertCheck(clientSetRes.status === 201, 'POST /api/client/workout-sets logs set progress for client');
+
+    // -------------------------------------------------------------------------
+    // 13. Production Safety Guards (Fail-Fast Checks & Strict Security Policies)
+    // -------------------------------------------------------------------------
+    console.log('\n[13/13] Testing Production Safety Guards & Strict Security Policies...');
+
+    // A. OPTIONS Preflight CORS Check
+    const preflightRes = await fetch(`${BASE_URL}/api/client/dashboard`, {
+      method: 'OPTIONS',
+      headers: {
+        'Origin': 'https://gym-k1eimpi49-finan4.vercel.app',
+        'Access-Control-Request-Method': 'GET',
+        'Access-Control-Request-Headers': 'Authorization'
+      }
+    });
+    assertCheck(preflightRes.status === 200 || preflightRes.status === 204, 'OPTIONS preflight responds with success (200/204)');
+    assertCheck(
+      preflightRes.headers.get('access-control-allow-origin') === 'https://gym-k1eimpi49-finan4.vercel.app',
+      'Access-Control-Allow-Origin permits authorized production frontend domain'
+    );
+
+    // B. Production Safety Check: In production, missing DATABASE_URL triggers safe exit
+    const prodDbCheck = spawnSync(nodeBinary, [
+      '-e',
+      `process.env.NODE_ENV = 'production';
+       delete process.env.DATABASE_URL;
+       import('./db.js').then(m => m.initDb()).catch(e => {
+         process.exit(42);
+       });`
+    ], { cwd: serverCwd });
+    assertCheck(prodDbCheck.status === 42, 'In production, missing DATABASE_URL halts startup with safe fatal error (no silent ephemeral fallback)');
+
+    // C. Production Safety Check: In production, missing or short JWT_SECRET triggers safe exit
+    const prodJwtCheck = spawnSync(nodeBinary, [
+      '-e',
+      `process.env.NODE_ENV = 'production';
+       process.env.DATABASE_URL = 'postgresql://dummy:dummy@localhost:5432/dummy';
+       delete process.env.JWT_SECRET;
+       import('./index.js').catch(e => {
+         process.exit(43);
+       });`
+    ], { cwd: serverCwd });
+    assertCheck(prodJwtCheck.status !== 0, 'In production, missing JWT_SECRET halts startup immediately (never uses hardcoded fallback)');
+
+    // D. Cross-Client Data Isolation
+    const crossProfileRes = await fetch(`${BASE_URL}/api/clients/john_doe`, {
+      headers: { 'Authorization': `Bearer ${dedicatedClientLoginData.token}` }
+    });
+    assertCheck(crossProfileRes.status === 403, 'Client (@thespring) strictly forbidden from reading profile of another client (HTTP 403)');
 
     console.log('\n====================================================');
     console.log(`ALL AUTOMATED TESTS PASSED: ${passedChecks}/${totalChecks} CHECKS VERIFIED (100%)`);
