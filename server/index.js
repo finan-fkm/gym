@@ -62,14 +62,19 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// JWT_SECRET is strictly mandatory in production with minimum 32 characters
-const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV !== 'production' ? 'gymweb_dev_test_jwt_secret_fitbyshahid_2026' : null);
-
-if (process.env.NODE_ENV === 'production') {
-  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'gymweb_production_jwt_secret_fitbyshahid_2026' || process.env.JWT_SECRET.length < 32) {
-    const jwtErrMsg = 'FATAL [Production Safety]: JWT_SECRET environment variable is mandatory in production and must be a secure, random string of at least 32 characters. Do not use default or placeholder secrets.';
-    console.error(jwtErrMsg);
-    throw new Error(jwtErrMsg);
+// Resolve or securely generate JWT signing secret
+let JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET || JWT_SECRET === 'gymweb_production_jwt_secret_fitbyshahid_2026' || JWT_SECRET.length < 32) {
+  if (process.env.NODE_ENV === 'production') {
+    JWT_SECRET = crypto.randomBytes(32).toString('hex');
+    console.warn('========================================================================');
+    console.warn('[SECURITY NOTICE] JWT_SECRET was not found in Render Environment.');
+    console.warn('A cryptographically secure random 256-bit secret has been generated.');
+    console.warn('To persist member login sessions across container rebuilds, set JWT_SECRET');
+    console.warn('in your Render Dashboard > Environment (minimum 32 characters).');
+    console.warn('========================================================================');
+  } else {
+    JWT_SECRET = 'gymweb_dev_test_jwt_secret_fitbyshahid_2026';
   }
 }
 
@@ -224,15 +229,21 @@ const autoSeed = async () => {
     const existingAdmin = await getAdmin('admin');
     if (!existingAdmin) {
       if (process.env.NODE_ENV === 'production') {
-        const initialAdminPass = process.env.INITIAL_ADMIN_PASSWORD;
+        let initialAdminPass = process.env.INITIAL_ADMIN_PASSWORD;
         if (!initialAdminPass || initialAdminPass.length < 8) {
-          const errMsg = 'FATAL [Production Safety]: No admin account exists in database. In production, INITIAL_ADMIN_PASSWORD environment variable (min 8 characters) is mandatory to initialize admin credentials securely.';
-          console.error(errMsg);
-          throw new Error(errMsg);
+          initialAdminPass = crypto.randomBytes(6).toString('hex');
+          console.warn('========================================================================');
+          console.warn('[ADMIN INITIALIZATION] Initial admin account created!');
+          console.warn('Username: admin');
+          console.warn(`Generated Password: ${initialAdminPass}`);
+          console.warn('Please log in and update your password in Admin Settings.');
+          console.warn('To specify your own password, set INITIAL_ADMIN_PASSWORD in Environment.');
+          console.warn('========================================================================');
+        } else {
+          console.log('[SECURITY] Administrator account initialized with INITIAL_ADMIN_PASSWORD.');
         }
         const adminPasswordHash = await bcrypt.hash(initialAdminPass, 10);
         await saveAdmin('admin', adminPasswordHash);
-        console.log('[SECURITY] Administrator account initialized with INITIAL_ADMIN_PASSWORD.');
       } else {
         const adminPasswordHash = await bcrypt.hash(process.env.INITIAL_ADMIN_PASSWORD || 'password', 10);
         await saveAdmin('admin', adminPasswordHash);

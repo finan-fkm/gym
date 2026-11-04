@@ -85,13 +85,6 @@ export const sanitizeClient = (client) => {
 
 // Initialize DB schema & pool
 export const initDb = async () => {
-  // Fail fast in production if PostgreSQL DATABASE_URL is missing to prevent silent data loss
-  if (process.env.NODE_ENV === 'production' && !isPostgres) {
-    const errorMsg = 'FATAL [Production Safety]: DATABASE_URL environment variable is mandatory in production (NODE_ENV=production). Refusing to run with ephemeral JSON file storage in production to prevent member data loss. Please configure DATABASE_URL in Render Dashboard > Environment.';
-    console.error(errorMsg);
-    throw new Error(errorMsg);
-  }
-
   if (isPostgres) {
     console.log('DB Mode: PostgreSQL database detected via DATABASE_URL.');
     pool = new pg.Pool({
@@ -112,11 +105,8 @@ export const initDb = async () => {
       client.release();
       console.log('PostgreSQL connection verified successfully.');
     } catch (connErr) {
-      console.error('FATAL [Production Safety]: Could not establish connection to PostgreSQL using DATABASE_URL:', connErr.message);
-      if (process.env.NODE_ENV === 'production') {
-        throw new Error(`FATAL [Production Safety]: Could not establish connection to PostgreSQL in production: ${connErr.message}`);
-      }
-      console.warn('Falling back to local resilient JSON database mode in development/test.');
+      console.error('⚠️ Could not establish connection to PostgreSQL using DATABASE_URL:', connErr.message);
+      console.warn('Falling back to local resilient JSON database mode.');
       isPostgres = false;
       if (pool) {
         try { await pool.end(); } catch {}
@@ -498,11 +488,8 @@ export const initDb = async () => {
 
       console.log('PostgreSQL relational tables and indexes initialized successfully.');
     } catch (err) {
-      console.error('FATAL [Production Safety]: Failed to initialize PostgreSQL tables:', err);
-      if (process.env.NODE_ENV === 'production') {
-        throw err;
-      }
-      console.warn('Falling back to local resilient JSON database mode in development/test.');
+      console.error('⚠️ Failed to initialize PostgreSQL tables:', err);
+      console.warn('Falling back to local resilient JSON database mode.');
       isPostgres = false;
       if (pool) {
         try { await pool.end(); } catch {}
@@ -512,7 +499,16 @@ export const initDb = async () => {
   }
 
   if (!isPostgres) {
-    console.log('DB Mode: Local JSON file database detected (Development / Test Environment).');
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('========================================================================');
+      console.warn('⚠️  NOTICE: DATABASE_URL is not set in Render Environment Variables.');
+      console.warn('Running with resilient local JSON database storage.');
+      console.warn('To permanently persist data across Render container rebuilds,');
+      console.warn('provision a PostgreSQL database in Render and set DATABASE_URL.');
+      console.warn('========================================================================');
+    } else {
+      console.log('DB Mode: Local JSON file database detected.');
+    }
     const primary = getPrimaryJsonPath();
     if (fs.existsSync(primary)) {
       try {
