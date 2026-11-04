@@ -17,13 +17,24 @@ export const useGymState = () => {
 };
 
 export const GymStateProvider = ({ children }) => {
-  const defaultApiUrl = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const configuredApiUrl = import.meta.env.VITE_API_URL;
+  const defaultApiUrl = isLocalhost
     ? 'http://localhost:5000'
-    : 'https://gym-wm1s.onrender.com';
-  const rawApiUrl = (import.meta.env.VITE_API_URL || defaultApiUrl).trim().replace(/\/+$/, '');
+    : (configuredApiUrl || 'https://gym-wm1s.onrender.com');
+  const rawApiUrl = (configuredApiUrl || defaultApiUrl).trim().replace(/\/+$/, '');
   const API_URL = rawApiUrl.startsWith('http://') || rawApiUrl.startsWith('https://')
     ? rawApiUrl
     : `https://${rawApiUrl}`;
+
+  useEffect(() => {
+    if (!isLocalhost && !import.meta.env.VITE_API_URL) {
+      console.warn(
+        '⚠️ [Fit By Shahid] VITE_API_URL is not set in Vercel Environment Variables!\n' +
+        'Please add VITE_API_URL pointing to your Render Web Service URL in Vercel Project Settings > Environment Variables, then redeploy.'
+      );
+    }
+  }, [isLocalhost]);
 
   const [isBackendConnected, setIsBackendConnected] = useState(false);
   const [isAuthChecking, setIsAuthChecking] = useState(true);

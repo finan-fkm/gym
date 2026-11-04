@@ -49,7 +49,13 @@ import {
   getAdminDashboardOverview,
   getClientDashboardData
 } from './db.js';
-import { initialClients } from './seedData.js';
+import { 
+  initialClients, 
+  initialTrainers, 
+  initialMembershipPlans, 
+  initialGymSettings, 
+  initialPayments 
+} from './seedData.js';
 
 dotenv.config();
 
@@ -222,6 +228,40 @@ const autoSeed = async () => {
       console.log('Client profiles seeded successfully.');
     } else {
       console.log(`Database already has ${existingClients.length} clients. Skipping seeding.`);
+    }
+
+    // Seed trainers if table is empty
+    const existingTrainers = await getTrainersList();
+    if (existingTrainers.length === 0) {
+      for (const trainer of initialTrainers) {
+        await saveTrainerProfile(trainer);
+      }
+      console.log(`Seeded ${initialTrainers.length} staff trainers.`);
+    }
+
+    // Seed membership plans if table is empty
+    const existingPlans = await getMembershipPlans();
+    if (existingPlans.length === 0) {
+      for (const plan of initialMembershipPlans) {
+        await saveMembershipPlan(plan);
+      }
+      console.log(`Seeded ${initialMembershipPlans.length} membership plans.`);
+    }
+
+    // Seed payments if table is empty
+    const existingPayments = await getPaymentRecords();
+    if (existingPayments.length === 0) {
+      for (const pay of initialPayments) {
+        await recordPaymentTransaction(pay);
+      }
+      console.log(`Seeded ${initialPayments.length} initial payment records.`);
+    }
+
+    // Seed gym settings if not customized
+    const currentSettings = await getGymSettings();
+    if (!currentSettings || !currentSettings.gymName) {
+      await updateGymSettings(initialGymSettings);
+      console.log('Seeded gym settings and branding configuration.');
     }
   } catch (err) {
     console.error('Auto-seed check error (non-fatal):', err);
