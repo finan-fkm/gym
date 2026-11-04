@@ -243,6 +243,13 @@ export const GymStateProvider = ({ children }) => {
     const rawUser = (username || '').trim();
     const cleanPass = (password || '').trim();
 
+    if (!API_URL && !isLocalhost) {
+      return {
+        success: false,
+        message: 'Backend URL is not configured. Please add VITE_API_URL in your Vercel Project Settings > Environment Variables, then redeploy.'
+      };
+    }
+
     const targetUrl = role === 'admin' 
       ? `${API_URL}/api/auth/admin/login` 
       : `${API_URL}/api/auth/client/login`;
@@ -261,6 +268,15 @@ export const GymStateProvider = ({ children }) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ role, username: rawUser, password: cleanPass, rememberMe })
         });
+      }
+
+      // Check if response is HTML instead of JSON (happens if VITE_API_URL is missing and requests hit Vercel SPA)
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        return {
+          success: false,
+          message: 'Backend returned an HTML response instead of JSON. Please verify VITE_API_URL in Vercel points to your live Render backend URL.'
+        };
       }
 
       const data = await res.json();
@@ -302,9 +318,12 @@ export const GymStateProvider = ({ children }) => {
       };
     } catch (err) {
       console.error('Login error:', err);
+      const isRemote = API_URL && !API_URL.includes('localhost');
       return {
         success: false,
-        message: 'Could not connect to authentication server. Please check your connection and try again.'
+        message: isRemote
+          ? 'Could not reach backend server. If your Render service is on the free tier, it may be waking up (takes ~30-50s). Please wait a moment and try again.'
+          : 'Could not connect to authentication server. Please check your connection and try again.'
       };
     }
   };
